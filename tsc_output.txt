@@ -1,0 +1,18 @@
+components/calendar/event-dialog.tsx(26,8): error TS2307: Cannot find module '@/components/ui/form' or its corresponding type declarations.
+components/calendar/event-dialog.tsx(29,26): error TS2307: Cannot find module '@/components/ui/checkbox' or its corresponding type declarations.
+components/calendar/event-dialog.tsx(83,9): error TS2322: Type 'Resolver<{ title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; description?: string | undefined; all_day?: boolean | undefined; }, any, { title: string; ... 5 more ...; description?: string | undefined; }>' is not assignable to type 'Resolver<{ title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; all_day: boolean; description?: string | undefined; }, any, { title: string; start_date: Date; ... 4 more ...; description?: string | undefined; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; all_day: boolean; description?: string | undefined; }>' is not assignable to type 'ResolverOptions<{ title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; description?: string | undefined; all_day?: boolean | undefined; }>'.
+      Type 'boolean | undefined' is not assignable to type 'boolean'.
+        Type 'undefined' is not assignable to type 'boolean'.
+components/calendar/event-dialog.tsx(147,55): error TS2345: Argument of type '(values: { title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; all_day: boolean; description?: string | undefined; }) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues>'.
+  Types of parameters 'values' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; all_day: boolean; description?: string | undefined; }'.
+      Type 'FieldValues' is missing the following properties from type '{ title: string; start_date: Date; start_time: string; end_date: Date; end_time: string; all_day: boolean; description?: string | undefined; }': title, start_date, start_time, end_date, and 2 more.
+components/calendar/event-dialog.tsx(151,40): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/calendar/event-dialog.tsx(166,44): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/calendar/event-dialog.tsx(204,44): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/calendar/event-dialog.tsx(223,44): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/calendar/event-dialog.tsx(261,44): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/calendar/event-dialog.tsx(279,40): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/calendar/event-dialog.tsx(297,40): error TS7031: Binding element 'field' implicitly has an 'any' type.

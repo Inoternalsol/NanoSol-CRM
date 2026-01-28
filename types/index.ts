@@ -1,0 +1,272 @@
+// Core Entity Types for NanoSol CRM
+
+// User & Organization
+export interface Organization {
+    id: string;
+    name: string;
+    slug: string; // subdomain
+    logo_url?: string;
+    primary_color?: string;
+    secondary_color?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Profile {
+    id: string;
+    user_id: string;
+    organization_id: string;
+    email: string;
+    full_name: string;
+    avatar_url?: string;
+    role: "admin" | "manager" | "agent" | "viewer";
+    phone?: string;
+    password_mock?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+// CRM Entities
+export interface Contact {
+    id: string;
+    organization_id: string;
+    first_name: string;
+    last_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    company?: string | null;
+    job_title?: string | null;
+    tags: string[];
+    custom_fields?: Record<string, unknown>;
+    lead_score?: number | null;
+    status?: string | null;
+    owner_id?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ContactStatus {
+    id: string;
+    organization_id: string;
+    name: string;
+    label: string;
+    color?: string;
+    order: number;
+    created_at: string;
+}
+
+export interface Deal {
+    id: string;
+    organization_id: string;
+    contact_id?: string | null;
+    name: string;
+    value: number;
+    currency: string;
+    stage: string;
+    pipeline_id: string;
+    probability: number;
+    expected_close_date?: string | null;
+    owner_id?: string | null;
+    created_at: string;
+    updated_at: string;
+    // Joined relations
+    contact?: {
+        id: string;
+        first_name: string;
+        last_name?: string | null;
+        email?: string | null;
+        phone?: string | null;
+        company?: string | null;
+    } | null;
+}
+
+export interface Pipeline {
+    id: string;
+    organization_id: string;
+    name: string;
+    stages: PipelineStage[];
+    created_at: string;
+}
+
+export interface PipelineStage {
+    id: string;
+    name: string;
+    order: number;
+    color?: string;
+}
+
+// Activities & Timeline
+export type ActivityType =
+    | "call"
+    | "email"
+    | "note"
+    | "meeting"
+    | "task"
+    | "page_visit"
+    | "file_upload"
+    | "system";
+
+export interface Activity {
+    id: string;
+    organization_id: string;
+    contact_id?: string;
+    deal_id?: string;
+    type: ActivityType;
+    title: string;
+    description?: string;
+    metadata?: Record<string, unknown>;
+    created_by?: string;
+    created_at: string;
+}
+
+// Tasks & Events
+export interface Task {
+    id: string;
+    organization_id: string;
+    contact_id?: string;
+    deal_id?: string;
+    title: string;
+    description?: string;
+    due_date?: string;
+    priority: "low" | "medium" | "high";
+    status: "pending" | "in_progress" | "completed";
+    assigned_to?: {
+        id: string;
+        full_name: string;
+        avatar_url?: string;
+    } | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CalendarEvent {
+    id: string;
+    organization_id: string;
+    title: string;
+    description?: string;
+    start_time: string;
+    end_time: string;
+    all_day: boolean;
+    contact_id?: string;
+    deal_id?: string;
+    created_by: string;
+    created_at: string;
+}
+
+// Communication
+export interface SIPProfile {
+    id: string;
+    organization_id: string;
+    user_id: string;
+    display_name: string;
+    sip_username: string;
+    sip_domain: string;
+    outbound_proxy?: string;
+    ws_server?: string; // WebSocket server URL (e.g., wss://sip.provider.com:8089/ws)
+    sip_password?: string; // For form input, maps to sip_password_encrypted
+    sip_password_encrypted?: string; // Stored encrypted in DB
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface SMTPConfig {
+    id: string;
+    organization_id: string;
+    host: string;
+    port: number;
+    username: string;
+    password_encrypted?: string;
+    use_tls: boolean;
+    from_name?: string;
+    from_email?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface EmailTemplate {
+    id: string;
+    organization_id: string;
+    name: string;
+    subject: string;
+    body_html: string;
+    body_text?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface EmailSequence {
+    id: string;
+    organization_id: string;
+    name: string;
+    steps: EmailSequenceStep[];
+    is_active: boolean;
+    enrolled_count?: number; // Optional analytics
+    open_rate?: number;     // Optional analytics
+    created_at: string;
+}
+
+export interface EmailSequenceStep {
+    id: string;
+    order: number;
+    delay_days: number;
+    template_id: string;
+    subject_override?: string;
+}
+
+// Automation
+export interface AutomationRule {
+    id: string;
+    organization_id: string;
+    name: string;
+    trigger_type: string;
+    trigger_config: Record<string, unknown>;
+    actions: AutomationAction[];
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface AutomationAction {
+    id: string;
+    type: string;
+    config: Record<string, unknown>;
+    order: number;
+}
+
+// Call Logs
+export interface CallLog {
+    id: string;
+    organization_id: string;
+    user_id?: string;
+    contact_id?: string;
+    phone_number: string;
+    direction: "inbound" | "outbound";
+    status: "completed" | "missed" | "failed" | "no_answer" | "busy";
+    duration_seconds: number;
+    outcome?: string;
+    notes?: string;
+    recording_url?: string;
+    started_at: string;
+    ended_at?: string;
+    created_at: string;
+    // Joined relations
+    contact?: {
+        id: string;
+        first_name: string;
+        last_name?: string | null;
+    } | null;
+}
+
+// API Keys for AI Providers
+export type AIProvider = "openai" | "gemini" | "qwen" | "kimi";
+
+export interface APIKeys {
+    id: string;
+    organization_id: string;
+    openai_key_encrypted?: string;
+    gemini_key_encrypted?: string;
+    qwen_key_encrypted?: string;
+    kimi_key_encrypted?: string;
+    active_provider: AIProvider;
+    created_at: string;
+    updated_at: string;
+}

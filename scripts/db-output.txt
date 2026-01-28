@@ -1,0 +1,11 @@
+[dotenv@17.2.3] injecting env (5) from .env.local -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+Fetching profiles...
+PROFILES_DATA_START
+USER: admin@inoternal.com | ROLE: admin | NAME: Inoternal | ID: 688ed0f2-f64b-472a-92c6-e5997dd24891
+USER: inoternal.com@gmail.com | ROLE: admin | NAME: Inoternal | ID: 3f3b8a6a-47f2-4686-9004-f955783e422f
+USER: success_manual@nanosol.app | ROLE: agent | NAME: Success Manual Agent | ID: f7d1ab4b-9151-49cb-b640-caa2a77c7cfd
+USER: manual@nanosol.app | ROLE: agent | NAME: Manual Agent | ID: 1409b2c0-adc1-4bc6-a787-64fed906b767
+USER: yilcini@nanosol.com | ROLE: agent | NAME: Yilcini Weng | ID: 4e746b39-a3f0-487e-b426-08384a9a3fb4
+USER: agent.v.1@gmail.com | ROLE: admin | NAME: Agent Check | ID: 375bafd3-9ccc-4095-ab75-4078ee3fd56a
+PROFILES_DATA_END
+STATS: CONTACTS=6 | DEALS=6
