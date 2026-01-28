@@ -178,10 +178,20 @@ export default function SettingsPage() {
         }
     };
 
-    const onSmtpSubmit = async (data: Partial<SMTPConfig>) => {
+    const onSmtpSubmit = async (data: Partial<SMTPConfig> & { password?: string }) => {
         try {
-            await updateSmtp({ orgId: profile.organization_id, updates: data });
+            const { password, ...rest } = data;
+            const updates: Partial<SMTPConfig> = { ...rest };
+
+            // Handle password field mapping
+            if (password) {
+                updates.password_encrypted = password;
+            }
+
+            await updateSmtp({ orgId: profile.organization_id, updates });
             toast.success("SMTP settings updated successfully");
+            // Clear password field after successful save
+            smtpForm.setValue("password", "");
         } catch {
             toast.error("Failed to update SMTP settings");
         }
