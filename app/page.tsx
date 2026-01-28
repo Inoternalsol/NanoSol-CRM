@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -175,14 +176,14 @@ export default function LandingPage() {
           >
             <div className="relative rounded-xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-1">
               <div className="rounded-lg bg-card border shadow-2xl overflow-hidden">
-                <div className="aspect-[16/9] bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center">
-                  <div className="text-center">
-                    <BarChart3 className="h-20 w-20 text-muted-foreground/30 mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      Dashboard Preview Coming Soon
-                    </p>
-                  </div>
-                </div>
+                <Image
+                  src="/dashboard-preview.png"
+                  alt="NanoSol CRM Dashboard Preview"
+                  width={1200}
+                  height={675}
+                  priority
+                  className="w-full h-auto object-cover"
+                />
               </div>
             </div>
           </motion.div>
