@@ -28,7 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useEmailTemplates, useCreateEmailSequence, useUpdateEmailSequence } from "@/hooks/use-data";
+import { useEmailTemplates, useCreateEmailSequence, useUpdateEmailSequence, useSMTPConfigs } from "@/hooks/use-data";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Clock } from "lucide-react";
 import { useEffect } from "react";
@@ -37,13 +37,15 @@ import type { EmailSequence } from "@/types";
 const stepSchema = z.object({
     id: z.string().optional(),
     order: z.number(),
-    delay_days: z.number().min(0, "Delay must be at least 0 days"),
+    delay_days: z.number().min(0, "Delay must be at least 0"),
+    delay_unit: z.enum(["minutes", "hours", "days"]).default("days"),
     template_id: z.string().min(1, "Template is required"),
     subject_override: z.string().optional().nullable(),
 });
 
 const formSchema = z.object({
     name: z.string().min(1, "Sequence name is required"),
+    smtp_config_id: z.string().min(1, "Outbound email account is required"),
     steps: z.array(stepSchema).min(1, "At least one step is required"),
     is_active: z.boolean().default(true),
 });
@@ -64,6 +66,7 @@ export function SequenceDialog({
     onSuccess,
 }: SequenceDialogProps) {
     const { data: templates } = useEmailTemplates();
+    const { data: smtpConfigs } = useSMTPConfigs();
     const { trigger: createSequence, isMutating: isCreating } = useCreateEmailSequence();
     const { trigger: updateSequence, isMutating: isUpdating } = useUpdateEmailSequence();
 
@@ -71,7 +74,8 @@ export function SequenceDialog({
         resolver: zodResolver(formSchema) as any,
         defaultValues: {
             name: "",
-            steps: [{ order: 1, delay_days: 1, template_id: "" }],
+            smtp_config_id: "",
+            steps: [{ order: 1, delay_days: 1, delay_unit: "days", template_id: "" }],
             is_active: true,
         },
     });
@@ -85,8 +89,10 @@ export function SequenceDialog({
         if (sequence) {
             form.reset({
                 name: sequence.name,
+                smtp_config_id: sequence.smtp_config_id || "",
                 steps: sequence.steps.map(s => ({
                     ...s,
+                    delay_unit: s.delay_unit || "days", // Backwards compatibility
                     subject_override: s.subject_override || null
                 })),
                 is_active: sequence.is_active,
@@ -94,7 +100,8 @@ export function SequenceDialog({
         } else {
             form.reset({
                 name: "",
-                steps: [{ order: 1, delay_days: 1, template_id: "" }],
+                smtp_config_id: "",
+                steps: [{ order: 1, delay_days: 1, delay_unit: "days", template_id: "" }],
                 is_active: true,
             });
         }
@@ -158,6 +165,34 @@ export function SequenceDialog({
                             )}
                         />
 
+                        <FormField
+                            control={form.control}
+                            name="smtp_config_id"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Engagement Account (SMTP)</FormLabel>
+                                    <Select
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select account for sending" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {smtpConfigs?.map((config) => (
+                                                <SelectItem key={config.id} value={config.id}>
+                                                    {config.name} ({config.email_addr})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <h4 className="text-sm font-semibold">Sequence Steps</h4>
@@ -168,7 +203,8 @@ export function SequenceDialog({
                                     onClick={() =>
                                         append({
                                             order: fields.length + 1,
-                                            delay_days: 3,
+                                            delay_days: 1,
+                                            delay_unit: "days",
                                             template_id: "",
                                         })
                                     }
@@ -199,28 +235,56 @@ export function SequenceDialog({
                                     </div>
 
                                     <div className="grid gap-4 sm:grid-cols-2">
-                                        <FormField
-                                            control={form.control}
-                                            name={`steps.${index}.delay_days`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="flex items-center gap-2">
-                                                        <Clock className="h-3 w-3" />
-                                                        Delay (Days)
-                                                    </FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            type="number"
-                                                            {...field}
-                                                            onChange={(e) =>
-                                                                field.onChange(parseInt(e.target.value))
-                                                            }
-                                                        />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                        <div className="flex gap-2">
+                                            <FormField
+                                                control={form.control}
+                                                name={`steps.${index}.delay_days`}
+                                                render={({ field }) => (
+                                                    <FormItem className="flex-1">
+                                                        <FormLabel className="flex items-center gap-2">
+                                                            <Clock className="h-3 w-3" />
+                                                            Delay
+                                                        </FormLabel>
+                                                        <FormControl>
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                {...field}
+                                                                onChange={(e) =>
+                                                                    field.onChange(parseInt(e.target.value))
+                                                                }
+                                                            />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={form.control}
+                                                name={`steps.${index}.delay_unit`}
+                                                render={({ field }) => (
+                                                    <FormItem className="w-[100px]">
+                                                        <FormLabel>&nbsp;</FormLabel>
+                                                        <Select
+                                                            onValueChange={field.onChange}
+                                                            defaultValue={field.value}
+                                                        >
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="minutes">Mins</SelectItem>
+                                                                <SelectItem value="hours">Hours</SelectItem>
+                                                                <SelectItem value="days">Days</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
 
                                         <FormField
                                             control={form.control}

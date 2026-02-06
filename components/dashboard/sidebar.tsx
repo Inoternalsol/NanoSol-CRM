@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     LayoutDashboard,
@@ -16,6 +17,7 @@ import {
     ChevronRight,
     Building2,
     BarChart3,
+    CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,9 +45,10 @@ const navigation: NavItem[] = [
     { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
     { name: "Calls", href: "/dashboard/calls", icon: Phone },
     { name: "Email", href: "/dashboard/email", icon: Mail },
-    { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+    { name: "Analytics", href: "/dashboard/reports", icon: BarChart3 },
+    { name: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
     { name: "Team", href: "/dashboard/team", icon: Users, roles: ["admin", "manager"] },
-    { name: "Automations", href: "/dashboard/automations", icon: Zap, roles: ["admin"] },
+    { name: "Automations", href: "/dashboard/automation", icon: Zap, roles: ["admin", "manager"] },
 ];
 
 const bottomNavigation: NavItem[] = [
@@ -57,11 +60,21 @@ export function Sidebar() {
     const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
     const { data: profile, isLoading: profileLoading } = useActiveProfile();
 
-    const filteredNavigation = navigation.filter(item => {
-        if (!item.roles) return true;
-        if (profileLoading) return false; // Better to hide until we know for sure to avoid flicker of restricted items
-        return profile && item.roles.includes(profile.role);
-    });
+    const filteredNavigation = useMemo(() => {
+        return navigation.filter(item => {
+            if (!item.roles) return true;
+            if (profileLoading) return false;
+            return profile && item.roles.includes(profile.role);
+        });
+    }, [profile, profileLoading]);
+
+    const filteredBottomNavigation = useMemo(() => {
+        return bottomNavigation.filter(item => {
+            if (!item.roles) return true;
+            if (profileLoading) return false;
+            return profile && item.roles.includes(profile.role);
+        });
+    }, [profile, profileLoading]);
 
     return (
         <TooltipProvider delayDuration={0}>
@@ -152,53 +165,47 @@ export function Sidebar() {
 
                 {/* Bottom Navigation */}
                 <div className="border-t border-border px-3 py-4">
-                    {bottomNavigation
-                        .filter(item => {
-                            if (!item.roles) return true;
-                            if (profileLoading) return false;
-                            return profile && item.roles.includes(profile.role);
-                        })
-                        .map((item) => {
-                            const isActive = pathname === item.href;
-                            const NavLink = (
-                                <Link
-                                    key={item.name}
-                                    href={item.href}
-                                    className={cn(
-                                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                                        "hover:bg-accent hover:text-accent-foreground",
-                                        isActive
-                                            ? "bg-primary/10 text-primary"
-                                            : "text-muted-foreground"
+                    {filteredBottomNavigation.map((item) => {
+                        const isActive = pathname === item.href;
+                        const NavLink = (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                                    "hover:bg-accent hover:text-accent-foreground",
+                                    isActive
+                                        ? "bg-primary/10 text-primary"
+                                        : "text-muted-foreground"
+                                )}
+                            >
+                                <item.icon className="h-5 w-5 shrink-0" />
+                                <AnimatePresence>
+                                    {!sidebarCollapsed && (
+                                        <motion.span
+                                            initial={{ opacity: 0, width: 0 }}
+                                            animate={{ opacity: 1, width: "auto" }}
+                                            exit={{ opacity: 0, width: 0 }}
+                                            className="whitespace-nowrap"
+                                        >
+                                            {item.name}
+                                        </motion.span>
                                     )}
-                                >
-                                    <item.icon className="h-5 w-5 shrink-0" />
-                                    <AnimatePresence>
-                                        {!sidebarCollapsed && (
-                                            <motion.span
-                                                initial={{ opacity: 0, width: 0 }}
-                                                animate={{ opacity: 1, width: "auto" }}
-                                                exit={{ opacity: 0, width: 0 }}
-                                                className="whitespace-nowrap"
-                                            >
-                                                {item.name}
-                                            </motion.span>
-                                        )}
-                                    </AnimatePresence>
-                                </Link>
+                                </AnimatePresence>
+                            </Link>
+                        );
+
+                        if (sidebarCollapsed) {
+                            return (
+                                <Tooltip key={item.name}>
+                                    <TooltipTrigger asChild>{NavLink}</TooltipTrigger>
+                                    <TooltipContent side="right">{item.name}</TooltipContent>
+                                </Tooltip>
                             );
+                        }
 
-                            if (sidebarCollapsed) {
-                                return (
-                                    <Tooltip key={item.name}>
-                                        <TooltipTrigger asChild>{NavLink}</TooltipTrigger>
-                                        <TooltipContent side="right">{item.name}</TooltipContent>
-                                    </Tooltip>
-                                );
-                            }
-
-                            return NavLink;
-                        })}
+                        return NavLink;
+                    })}
 
                     {/* Collapse Toggle */}
                     <Button

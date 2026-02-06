@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtime } from "./use-realtime";
 import type { CallLog } from "@/types";
 
 const supabase = createClient();
@@ -30,7 +32,12 @@ async function fetchCallLogs(limit = 50): Promise<CallLog[]> {
 // ============================================
 
 export function useCallLogs(limit = 50) {
-    return useSWR<CallLog[]>(`call-logs-${limit}`, () => fetchCallLogs(limit));
+    const swr = useSWR<CallLog[]>(`call-logs-${limit}`, () => fetchCallLogs(limit));
+
+    const realtimeKey = useMemo(() => (key: unknown) => typeof key === "string" && key.startsWith("call-logs-"), []);
+    useRealtime("call_logs", realtimeKey);
+
+    return swr;
 }
 
 // ============================================

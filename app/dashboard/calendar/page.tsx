@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Calendar, Plus, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { EventDialog } from "@/components/calendar/event-dialog";
 import { format, isSameDay, parseISO } from "date-fns";
 
 export default function CalendarPage() {
+    const router = useRouter();
     const { data: events, isLoading } = useCalendarEvents();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -53,7 +55,7 @@ export default function CalendarPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => alert("Calendar sync: Connect your Google/Outlook calendar in Settings > Integrations")}>
+                    <Button variant="outline" onClick={() => router.push("/dashboard/settings?tab=integrations")}>
                         <Calendar className="mr-2 h-4 w-4" />
                         Sync Calendar
                     </Button>
@@ -204,7 +206,9 @@ export default function CalendarPage() {
                             <p className="text-sm text-muted-foreground mb-4">
                                 Connect Google Calendar or Outlook to automatically sync your meetings.
                             </p>
-                            <Button className="w-full">Connect Calendar</Button>
+                            <Button className="w-full" onClick={() => router.push("/dashboard/settings?tab=integrations")}>
+                                Connect Calendar
+                            </Button>
                         </CardContent>
                     </Card>
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import {
     Dialog,
     DialogContent,
@@ -64,7 +64,7 @@ export function DealDialog({
         handleSubmit,
         reset,
         setValue,
-        watch,
+        control,
         formState: { errors },
     } = useForm<DealFormData>({
         defaultValues: deal
@@ -108,7 +108,15 @@ export function DealDialog({
         }
     }, [deal, reset, stages]);
 
-    const selectedStage = watch("stage");
+    const selectedStage = useWatch({
+        control,
+        name: "stage",
+    });
+
+    const watchedContactId = useWatch({
+        control,
+        name: "contact_id",
+    });
 
     const onSubmit = async (data: DealFormData) => {
         try {
@@ -215,7 +223,7 @@ export function DealDialog({
                     <div className="space-y-2">
                         <Label htmlFor="contact_id">Contact</Label>
                         <Select
-                            value={watch("contact_id")}
+                            value={watchedContactId}
                             onValueChange={(value) => setValue("contact_id", value)}
                         >
                             <SelectTrigger>
@@ -231,7 +239,7 @@ export function DealDialog({
                                 ))}
                             </SelectContent>
                         </Select>
-                        {isAgent && watch("contact_id") === "none" && (
+                        {isAgent && watchedContactId === "none" && (
                             <p className="text-xs text-destructive">Agents must link a contact to create a deal.</p>
                         )}
                     </div>
@@ -253,7 +261,7 @@ export function DealDialog({
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={isCreating || isUpdating || (isAgent && watch("contact_id") === "none")}>
+                        <Button type="submit" disabled={isCreating || isUpdating || (isAgent && watchedContactId === "none")}>
                             {isCreating || isUpdating
                                 ? "Saving..."
                                 : isEditing

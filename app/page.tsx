@@ -73,7 +73,7 @@ const testimonials = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" suppressHydrationWarning>
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -105,12 +105,12 @@ export default function LandingPage() {
               </Link>
             </div>
             <div className="flex items-center gap-3">
-              <Link href="/login">
-                <Button variant="ghost">Sign in</Button>
-              </Link>
-              <Link href="/signup">
-                <Button>Get Started</Button>
-              </Link>
+              <Button variant="ghost" asChild>
+                <Link href="/login">Sign in</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/signup">Get Started</Link>
+              </Button>
             </div>
           </div>
         </div>
@@ -139,17 +139,17 @@ export default function LandingPage() {
               sales. All in one beautiful, powerful platform.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/signup">
-                <Button size="lg" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto" asChild>
+                <Link href="/signup">
                   Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="#features">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
+                <Link href="#features">
                   See Features
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
             <div className="mt-8 flex items-center justify-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
@@ -293,12 +293,12 @@ export default function LandingPage() {
               Join thousands of teams already using NanoSol CRM to close more
               deals.
             </p>
-            <Link href="/signup">
-              <Button size="lg">
+            <Button size="lg" asChild>
+              <Link href="/signup">
                 Start Your Free Trial
                 <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </motion.div>
         </div>
       </section>

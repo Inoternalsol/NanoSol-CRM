@@ -15,6 +15,7 @@ import {
     Zap,
     Building2,
     BarChart3,
+    CheckSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,7 +36,8 @@ const navigation: NavItem[] = [
     { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
     { name: "Calls", href: "/dashboard/calls", icon: Phone },
     { name: "Email", href: "/dashboard/email", icon: Mail },
-    { name: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+    { name: "Analytics", href: "/dashboard/reports", icon: BarChart3 },
+    { name: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
     { name: "Team", href: "/dashboard/team", icon: Users, roles: ["admin", "manager"] },
     { name: "Automations", href: "/dashboard/automations", icon: Zap, roles: ["admin"] },
 ];

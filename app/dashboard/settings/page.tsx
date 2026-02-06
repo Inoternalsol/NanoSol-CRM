@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
     User,
@@ -11,6 +12,9 @@ import {
     Bell,
     Database,
     Key,
+    Code,
+    Globe,
+    Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,28 +24,51 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useSipProfile, useUpdateSipProfile, useSmtpConfig, useUpdateSmtpConfig, useApiKeys, useUpdateApiKeys } from "@/hooks/use-data";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useSipProfile, useUpdateSipProfile, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar } from "@/hooks/use-data";
+import { EmailAccountManager } from "@/components/settings/email-account-manager";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import type { Profile, Organization, SIPProfile, SMTPConfig, APIKeys, AIProvider } from "@/types";
 
 export default function SettingsPage() {
-    const { data: profile, isLoading: profileLoading } = useActiveProfile();
-    const { data: org, isLoading: orgLoading } = useOrganization(profile?.organization_id || null);
-    const { data: sip, isLoading: sipLoading } = useSipProfile(profile?.id || null);
-    const { data: smtp, isLoading: smtpLoading } = useSmtpConfig(profile?.organization_id || null);
-    const { data: apiKeys, isLoading: apiKeysLoading } = useApiKeys(profile?.organization_id || null);
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <SettingsContent />
+        </Suspense>
+    );
+}
 
+function SettingsContent() {
+    const { data: profile, isLoading: profileLoading } = useActiveProfile();
+    const { data: org } = useOrganization(profile?.organization_id || null);
+    const { data: sip } = useSipProfile(profile?.id || null);
+    const { data: apiKeys } = useApiKeys(profile?.organization_id || null);
     const { trigger: updateProfile, isMutating: isUpdatingProfile } = useUpdateProfile();
     const { trigger: updateOrg, isMutating: isUpdatingOrg } = useUpdateOrganization();
     const { trigger: updateSip, isMutating: isUpdatingSip } = useUpdateSipProfile();
-    const { trigger: updateSmtp, isMutating: isUpdatingSmtp } = useUpdateSmtpConfig();
     const { trigger: updateApiKeys, isMutating: isUpdatingApiKeys } = useUpdateApiKeys();
+    const { data: integrations, mutate: mutateIntegrations } = useIntegrations(profile?.id || null);
+    const { trigger: syncCalendar, isMutating: isSyncing } = useSyncCalendar();
 
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialTab = searchParams.get("tab") || "profile";
+    const [activeTab, setActiveTab] = useState(initialTab);
+
+    useEffect(() => {
+        const tab = searchParams.get("tab");
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab);
+        }
+    }, [searchParams, activeTab]);
+
     const isAdmin = profile?.role === "admin" || profile?.role === "manager";
 
     // Profile Form
@@ -74,17 +101,6 @@ export default function SettingsPage() {
         }
     });
 
-    // SMTP Form
-    const smtpForm = useForm({
-        defaultValues: {
-            host: smtp?.host || "",
-            port: smtp?.port || 587,
-            username: smtp?.username || "",
-            password: "",
-            from_name: smtp?.from_name || "",
-            from_email: smtp?.from_email || "",
-        }
-    });
 
     // API Keys Form
     const apiKeysForm = useForm({
@@ -97,50 +113,77 @@ export default function SettingsPage() {
         }
     });
 
-    // Sync forms when data loads
+    const colorPreviewRef = useRef<HTMLDivElement>(null);
+    const watchedPrimaryColor = useWatch({
+        control: orgForm.control,
+        name: "primary_color",
+    });
+
     useEffect(() => {
-        if (profile) profileForm.reset({ full_name: profile.full_name, phone: profile.phone });
+        if (colorPreviewRef.current) {
+            colorPreviewRef.current.style.backgroundColor = watchedPrimaryColor || "#3b82f6";
+        }
+    }, [watchedPrimaryColor]);
+
+    // Refs to track previous data state to prevent infinite loops
+    // Refs to track if forms have been initialized with data
+    const profileInitialized = useRef(false);
+    const orgInitialized = useRef(false);
+    const sipInitialized = useRef(false);
+    const smtpInitialized = useRef(false);
+    const apiKeysInitialized = useRef(false);
+
+    // Init forms when data first loads
+    useEffect(() => {
+        if (profile && !profileInitialized.current) {
+            profileForm.reset({ full_name: profile.full_name, phone: profile.phone });
+            profileInitialized.current = true;
+        }
     }, [profile, profileForm]);
 
     useEffect(() => {
-        if (org) orgForm.reset({ name: org.name, slug: org.slug, primary_color: org.primary_color, logo_url: org.logo_url });
+        if (org && !orgInitialized.current) {
+            orgForm.reset({ name: org.name, slug: org.slug, primary_color: org.primary_color, logo_url: org.logo_url });
+            orgInitialized.current = true;
+        }
     }, [org, orgForm]);
 
     useEffect(() => {
-        if (sip) sipForm.reset({
-            display_name: sip.display_name,
-            sip_username: sip.sip_username,
-            sip_domain: sip.sip_domain,
-            outbound_proxy: sip.outbound_proxy || ""
-        });
+        if (sip && !sipInitialized.current) {
+            sipForm.reset({
+                display_name: sip.display_name,
+                sip_username: sip.sip_username,
+                sip_domain: sip.sip_domain,
+                outbound_proxy: sip.outbound_proxy || "",
+                ws_server: sip.ws_server || ""
+            });
+            sipInitialized.current = true;
+        }
     }, [sip, sipForm]);
 
-    useEffect(() => {
-        if (smtp) smtpForm.reset({
-            host: smtp.host,
-            port: smtp.port,
-            username: smtp.username,
-            from_name: smtp.from_name || "",
-            from_email: smtp.from_email || ""
-        });
-    }, [smtp, smtpForm]);
 
     useEffect(() => {
-        if (apiKeys) apiKeysForm.reset({
-            active_provider: apiKeys.active_provider || "openai",
-            // Note: We don't populate the keys since they're encrypted; user must re-enter to update
-        });
+        if (apiKeys && !apiKeysInitialized.current) {
+            apiKeysForm.reset({
+                active_provider: apiKeys.active_provider || "openai",
+                openai_key: "",
+                gemini_key: "",
+                qwen_key: "",
+                kimi_key: "",
+            });
+            apiKeysInitialized.current = true;
+        }
     }, [apiKeys, apiKeysForm]);
 
 
-    if (profileLoading || orgLoading || sipLoading || smtpLoading || apiKeysLoading) {
+    // We do NOT block rendering on loading, because it unmounts the component and resets refs.
+    if (profileLoading) {
         return (
-            <div className="flex h-[400px] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="flex h-[400px] w-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
-
 
     if (!profile) {
         return (
@@ -178,24 +221,6 @@ export default function SettingsPage() {
         }
     };
 
-    const onSmtpSubmit = async (data: Partial<SMTPConfig> & { password?: string }) => {
-        try {
-            const { password, ...rest } = data;
-            const updates: Partial<SMTPConfig> = { ...rest };
-
-            // Handle password field mapping
-            if (password) {
-                updates.password_encrypted = password;
-            }
-
-            await updateSmtp({ orgId: profile.organization_id, updates });
-            toast.success("SMTP settings updated successfully");
-            // Clear password field after successful save
-            smtpForm.setValue("password", "");
-        } catch {
-            toast.error("Failed to update SMTP settings");
-        }
-    };
 
     const onApiKeysSubmit = async (data: { openai_key: string; gemini_key: string; qwen_key: string; kimi_key: string; active_provider: AIProvider }) => {
         try {
@@ -231,11 +256,12 @@ export default function SettingsPage() {
                 </p>
             </div>
 
-            <Tabs defaultValue="profile" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6 mb-8">
                     <TabsTrigger value="profile">Profile</TabsTrigger>
                     {isAdmin && <TabsTrigger value="organization">Organization</TabsTrigger>}
                     <TabsTrigger value="integrations">Integrations</TabsTrigger>
+                    {isAdmin && <TabsTrigger value="developer">Developer</TabsTrigger>}
                     <TabsTrigger value="notifications">Notifications</TabsTrigger>
                     <TabsTrigger value="security">Security</TabsTrigger>
                 </TabsList>
@@ -321,7 +347,10 @@ export default function SettingsPage() {
                                                 <Label htmlFor="primary_color">Primary Color</Label>
                                                 <div className="flex gap-2">
                                                     <Input id="primary_color" {...orgForm.register("primary_color")} />
-                                                    <div className="w-10 h-10 rounded-md border" style={{ backgroundColor: orgForm.watch("primary_color") }} />
+                                                    <div
+                                                        ref={colorPreviewRef}
+                                                        className="w-10 h-10 rounded-md border"
+                                                    />
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
@@ -340,10 +369,175 @@ export default function SettingsPage() {
                         </Card>
                     </TabsContent>
                 )}
+                {/* Developer - Admin Only */}
+                {isAdmin && (
+                    <TabsContent value="developer">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Code className="h-5 w-5" />
+                                    Developer Settings
+                                </CardTitle>
+                                <CardDescription>
+                                    Manage API keys and developer access
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="rounded-lg border p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <h4 className="text-sm font-medium">Public API Access</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                Generate API keys for external integrations and custom apps.
+                                            </p>
+                                        </div>
+                                        <Button asChild>
+                                            <Link href="/dashboard/settings/developer">
+                                                Manage Keys
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                )}
 
                 {/* Integrations */}
                 <TabsContent value="integrations">
                     <div className="space-y-6">
+                        {/* Web Forms Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Globe className="h-5 w-5" />
+                                    Web Forms
+                                </CardTitle>
+                                <CardDescription>
+                                    Create and manage web-to-lead forms for your website
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="rounded-lg border p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <h4 className="text-sm font-medium">Lead Capture Forms</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                Create HTML forms to collect leads directly into your CRM.
+                                            </p>
+                                        </div>
+                                        <Button asChild variant="outline">
+                                            <Link href="/dashboard/settings/integrations">
+                                                Manage Forms
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Calendar Sync Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Calendar className="h-5 w-5" />
+                                    Calendar Sync
+                                </CardTitle>
+                                <CardDescription>
+                                    Connect your external calendars to sync meetings and events
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-6">
+                                    {/* Google Calendar */}
+                                    <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2 bg-blue-500/10 rounded-full">
+                                                <Globe className="h-6 w-6 text-blue-500" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-medium text-sm">Google Calendar</h4>
+                                                <p className="text-xs text-muted-foreground">Sync events, meetings and busy times</p>
+                                                {integrations?.find(i => i.provider === 'google') && (
+                                                    <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                                                        <CheckCircle2 className="h-3 w-3" />
+                                                        Connected
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {integrations?.find(i => i.provider === 'google') ? (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    disabled={isSyncing}
+                                                    onClick={async () => {
+                                                        try {
+                                                            await syncCalendar({ provider: 'google' });
+                                                            toast.success("Calendar synced successfully!");
+                                                        } catch (err: any) {
+                                                            toast.error(err.message);
+                                                        }
+                                                    }}
+                                                >
+                                                    {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                                                    Sync Now
+                                                </Button>
+                                            ) : (
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a href="/api/integrations/google/auth">Connect</a>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Outlook Calendar */}
+                                    <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2 bg-orange-500/10 rounded-full">
+                                                <Globe className="h-6 w-6 text-orange-500" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-medium text-sm">Outlook / Microsoft 365</h4>
+                                                <p className="text-xs text-muted-foreground">Sync your Outlook calendar events</p>
+                                                {integrations?.find(i => i.provider === 'outlook') && (
+                                                    <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                                                        <CheckCircle2 className="h-3 w-3" />
+                                                        Connected
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {integrations?.find(i => i.provider === 'outlook') ? (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    disabled={isSyncing}
+                                                    onClick={async () => {
+                                                        try {
+                                                            await syncCalendar({ provider: 'outlook' });
+                                                            toast.success("Calendar synced successfully!");
+                                                        } catch (err: any) {
+                                                            toast.error(err.message);
+                                                        }
+                                                    }}
+                                                >
+                                                    {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                                                    Sync Now
+                                                </Button>
+                                            ) : (
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a href="/api/integrations/outlook/auth">Connect</a>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -392,57 +586,13 @@ export default function SettingsPage() {
 
                         {isAdmin && (
                             <>
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Mail className="h-5 w-5" />
-                                            SMTP Configuration
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Configure your email sending settings
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <form onSubmit={smtpForm.handleSubmit(onSmtpSubmit)} className="space-y-4">
-                                            <div className="grid gap-4 sm:grid-cols-2">
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="host">SMTP Host</Label>
-                                                    <Input id="host" {...smtpForm.register("host")} placeholder="smtp.provider.com" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="port">SMTP Port</Label>
-                                                    <Input id="port" {...smtpForm.register("port", { valueAsNumber: true })} placeholder="587" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="username">Username</Label>
-                                                    <Input id="username" {...smtpForm.register("username")} placeholder="your-email@domain.com" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="password">Password</Label>
-                                                    <Input id="password" type="password" {...smtpForm.register("password")} placeholder="••••••••" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="from_name">From Name</Label>
-                                                    <Input id="from_name" {...smtpForm.register("from_name")} placeholder="Your Name" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="from_email">From Email</Label>
-                                                    <Input id="from_email" {...smtpForm.register("from_email")} placeholder="no-reply@domain.com" />
-                                                </div>
-                                            </div>
-                                            <Button type="submit" disabled={isUpdatingSmtp}>
-                                                {isUpdatingSmtp && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                Save SMTP Settings
-                                            </Button>
-                                        </form>
-                                    </CardContent>
-                                </Card>
+                                <EmailAccountManager orgId={profile.organization_id} />
 
                                 <Card>
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2">
                                             <Key className="h-5 w-5" />
-                                            API Keys
+                                            AI Configuration
                                         </CardTitle>
                                         <CardDescription>
                                             Manage your API keys for AI-powered features. Keys are securely stored.
@@ -487,7 +637,7 @@ export default function SettingsPage() {
                                             </p>
                                             <Button type="submit" disabled={isUpdatingApiKeys}>
                                                 {isUpdatingApiKeys && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                Save API Keys
+                                                Save AI Keys
                                             </Button>
                                         </form>
                                     </CardContent>

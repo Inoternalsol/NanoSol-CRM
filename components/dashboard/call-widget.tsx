@@ -4,97 +4,45 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Phone,
-    PhoneOff,
-    Mic,
-    MicOff,
-    Volume2,
-    VolumeX,
-    Minimize2,
-    Maximize2,
     X,
-    Hash,
-    Clock,
+    Minimize2,
     Pause,
     Play,
-    PhoneForwarded,
-    User,
-    Search,
-    Wifi,
-    WifiOff,
-    AlertCircle,
-    CheckCircle2,
-    History,
+    SkipForward,
+    Square,
+    Clock,
+    History as HistoryIcon,
+    LayoutGrid
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useDialerStore } from "@/lib/stores";
 import { SipService } from "@/lib/services/sip-service";
-import { useCreateActivity, useContacts, useCreateCallLog, useActiveProfile } from "@/hooks/use-data";
-import { toast } from "sonner";
+import { useContactsPaginated, useContactByPhone } from "@/hooks/use-data";
+import { useDebounce } from "@/hooks/use-debounce";
 
-const dialpadKeys = [
-    ["1", "2", "3"],
-    ["4", "5", "6"],
-    ["7", "8", "9"],
-    ["*", "0", "#"],
-];
+// Sub-components
+import { DialerPad } from "./dialer/dialer-pad";
+import { ActiveCall } from "./dialer/active-call";
+import { CallHistory } from "./dialer/call-history";
 
-const dialpadLetters: Record<string, string> = {
-    "2": "ABC",
-    "3": "DEF",
-    "4": "GHI",
-    "5": "JKL",
-    "6": "MNO",
-    "7": "PQRS",
-    "8": "TUV",
-    "9": "WXYZ",
+const StatusBadge = ({ sipStatus }: { sipStatus: string }) => {
+    const statusMap: Record<string, { color: string; label: string }> = {
+        connected: { color: "bg-green-500", label: "Ready" },
+        connecting: { color: "bg-yellow-500 animate-pulse", label: "Connecting" },
+        disconnected: { color: "bg-red-500", label: "Offline" },
+        error: { color: "bg-red-600", label: "Error" },
+    };
+    const s = statusMap[sipStatus] || statusMap.disconnected;
+    return (
+        <Badge variant="outline" className="h-5 gap-1.5 px-2 border-muted/50 bg-muted/20">
+            <span className={cn("h-1.5 w-1.5 rounded-full", s.color)} />
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{s.label}</span>
+        </Badge>
+    );
 };
-
-const callOutcomes = [
-    { label: "Answered", value: "answered", color: "bg-green-500 hover:bg-green-600" },
-    { label: "No Answer", value: "no-answer", color: "bg-yellow-500 hover:bg-yellow-600" },
-    { label: "DND", value: "dnd", color: "bg-orange-500 hover:bg-orange-600" },
-    { label: "Failed", value: "failed", color: "bg-red-500 hover:bg-red-600" },
-];
-
-// SIP error code to friendly message mapping
-const sipErrorMessages: Record<number, string> = {
-    400: "Bad request - check the number format",
-    401: "Authentication failed",
-    403: "Call forbidden by provider",
-    404: "Number not found",
-    408: "Request timeout",
-    480: "Temporarily unavailable",
-    486: "Busy",
-    487: "Call cancelled",
-    488: "Not acceptable here",
-    500: "Server error",
-    502: "Bad gateway",
-    503: "Service unavailable",
-    504: "Gateway timeout",
-    600: "Busy everywhere",
-    603: "Declined",
-};
-
-const StatusBadge = ({ sipStatus }: { sipStatus: string }) => (
-    <Badge
-        variant="outline"
-        className={cn(
-            "text-xs gap-1",
-            sipStatus === "connected" && "border-green-500 text-green-500",
-            sipStatus === "connecting" && "border-yellow-500 text-yellow-500",
-            sipStatus === "disconnected" && "border-red-500 text-red-500",
-            sipStatus === "error" && "border-red-500 text-red-500"
-        )}
-    >
-        {sipStatus === "connected" && <><Wifi className="h-3 w-3" /> Ready</>}
-        {sipStatus === "connecting" && <><Wifi className="h-3 w-3 animate-pulse" /> Connecting</>}
-        {sipStatus === "disconnected" && <><WifiOff className="h-3 w-3" /> Offline</>}
-        {sipStatus === "error" && <><AlertCircle className="h-3 w-3" /> Error</>}
-    </Badge>
-);
 
 export function CallWidget() {
     const {
@@ -107,227 +55,73 @@ export function CallWidget() {
         openDialer,
         setCurrentNumber,
         startCall,
-        endCall,
-        updateQueueStatus,
         autoDialerActive,
-        nextAutoDialNumber,
-        callStartedAt,
-        callEndedAt,
+        isAutoDialerPaused,
+        toggleAutoDialerPause,
+        terminateAutoDialer,
+        skipCurrent,
     } = useDialerStore();
 
-    const { data: contacts } = useContacts();
-    const { trigger: createActivity } = useCreateActivity();
-    const { trigger: createCallLog } = useCreateCallLog();
-    const { data: activeProfile } = useActiveProfile();
+    const { data: contact } = useContactByPhone(currentNumber || null);
 
     const [isMuted, setIsMuted] = useState(false);
     const [isSpeakerOn, setIsSpeakerOn] = useState(true);
     const [isOnHold, setIsOnHold] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
     const [durationDisplay, setDurationDisplay] = useState("00:00");
-    const [showOutcomes, setShowOutcomes] = useState(false);
     const [showKeypad, setShowKeypad] = useState(false);
-    const [showRecentCalls, setShowRecentCalls] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [sipStatus, setSipStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
-    const [lastError, setLastError] = useState<string | null>(null);
     const [recentCalls, setRecentCalls] = useState<Array<{ number: string; name?: string; time: Date; status: string }>>([]);
 
-    // Find contact by number
-    const contact = contacts?.find(c => c.phone === currentNumber);
+    const debouncedSearch = useDebounce(searchQuery, 300);
+    const { data: searchResults } = useContactsPaginated({ search: debouncedSearch, limit: 5 });
 
-    // Filter contacts for quick dial
-    const filteredContacts = contacts?.filter(c =>
-        c.phone && (
-            c.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            c.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            c.phone.includes(searchQuery)
-        )
-    ).slice(0, 5);
-
-    // Check SIP status periodically
     useEffect(() => {
-        const checkStatus = () => {
+        const interval = setInterval(() => {
             const sip = SipService.getInstance();
-            if (sip.isRegistered) {
-                setSipStatus("connected");
-            } else if (sip.isConnected) {
-                setSipStatus("connecting");
-            } else {
-                setSipStatus("disconnected");
-            }
-        };
-
-        checkStatus();
-        const interval = setInterval(checkStatus, 2000);
+            setSipStatus(sip.isRegistered ? "connected" : sip.isConnected ? "connecting" : "disconnected");
+        }, 2000);
         return () => clearInterval(interval);
     }, []);
 
-    // Format call duration
     useEffect(() => {
         if (!isInCall) return;
-
         const interval = setInterval(() => {
-            const minutes = Math.floor(callDuration / 60);
-            const seconds = callDuration % 60;
-            setDurationDisplay(
-                `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-            );
+            const mins = Math.floor(callDuration / 60);
+            const secs = callDuration % 60;
+            setDurationDisplay(`${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`);
         }, 1000);
-
         return () => clearInterval(interval);
     }, [isInCall, callDuration]);
 
-    // Listen for SIP events
-    useEffect(() => {
-        const handleCallFailed = (event: CustomEvent) => {
-            const { cause, message, reason } = event.detail;
-            const statusCode = message || 0;
-            const friendlyMessage = reason || sipErrorMessages[statusCode] || cause || "Call failed";
-            setLastError(friendlyMessage);
-            toast.error(friendlyMessage);
-
-            // Add to recent calls with failed status
-            setRecentCalls(prev => [{
-                number: currentNumber,
-                name: contact?.first_name,
-                time: new Date(),
-                status: "failed"
-            }, ...prev.slice(0, 9)]);
-        };
-
-        window.addEventListener("sip:call:failed", handleCallFailed as EventListener);
-        return () => window.removeEventListener("sip:call:failed", handleCallFailed as EventListener);
-    }, [currentNumber, contact]);
-
-    const handleKeyPress = (key: string) => {
-        setCurrentNumber(currentNumber + key);
-        if (isInCall) {
-            SipService.getInstance().sendDTMF(key);
-        }
-    };
-
-    const handleCall = useCallback(() => {
-        if (currentNumber.length > 0) {
-            setLastError(null);
+    const handleCall = useCallback((numberOverride?: string) => {
+        const target = numberOverride || currentNumber;
+        if (target) {
             startCall();
-            SipService.getInstance().call(currentNumber);
-            setShowOutcomes(false);
+            if (target !== currentNumber) setCurrentNumber(target);
+            SipService.getInstance().call(target);
         }
-    }, [currentNumber, startCall]);
+    }, [currentNumber, startCall, setCurrentNumber]);
 
-    const handleHangup = () => {
-        SipService.getInstance().hangup();
-        setShowOutcomes(true);
-        setIsOnHold(false);
-        setIsMuted(false);
-    };
+    const handleHangup = () => SipService.getInstance().hangup();
 
-    const handleHold = () => {
-        // JsSIP doesn't have built-in hold, this is a placeholder
-        setIsOnHold(!isOnHold);
-        toast.info(isOnHold ? "Call resumed" : "Call on hold");
-    };
-
-    const handleQuickDial = (phone: string, name?: string) => {
+    const handleQuickDial = (phone: string) => {
         setCurrentNumber(phone);
         setSearchQuery("");
-        toast.info(`Dialing ${name || phone}`);
+        handleCall(phone);
     };
-
-    const handleOutcome = async (outcome: typeof callOutcomes[0]) => {
-        try {
-            // Add to recent calls
-            setRecentCalls(prev => [{
-                number: currentNumber,
-                name: contact?.first_name,
-                time: new Date(),
-                status: outcome.value
-            }, ...prev.slice(0, 9)]);
-
-            // Persist call log to database
-            if (activeProfile?.organization_id) {
-                const statusMap: Record<string, "completed" | "missed" | "failed" | "no_answer" | "busy"> = {
-                    "answered": "completed",
-                    "no-answer": "no_answer",
-                    "dnd": "busy",
-                    "failed": "failed",
-                };
-
-                const finalStartedAt = callStartedAt || new Date().toISOString();
-                const finalEndedAt = callEndedAt || new Date().toISOString();
-
-                await createCallLog({
-                    organization_id: activeProfile.organization_id,
-                    user_id: activeProfile.id,
-                    contact_id: contact?.id,
-                    phone_number: currentNumber,
-                    direction: "outbound",
-                    status: statusMap[outcome.value] || "completed",
-                    duration_seconds: callDuration,
-                    outcome: outcome.value,
-                    started_at: finalStartedAt,
-                    ended_at: finalEndedAt,
-                });
-            }
-
-            // Log activity
-            if (contact) {
-                await createActivity({
-                    organization_id: contact.organization_id,
-                    contact_id: contact.id,
-                    type: "call",
-                    title: `Call to ${contact.first_name}: ${outcome.label}`,
-                    description: `Duration: ${durationDisplay}. Result: ${outcome.label}`,
-                    metadata: {
-                        duration: callDuration,
-                        outcome: outcome.value,
-                        number: currentNumber
-                    }
-                });
-            }
-
-            toast.success(`Call logged as ${outcome.label}`);
-            updateQueueStatus(currentNumber, outcome.value as Parameters<typeof updateQueueStatus>[1]);
-            setShowOutcomes(false);
-            endCall();
-
-            if (autoDialerActive) {
-                const next = nextAutoDialNumber();
-                if (next) {
-                    toast.info(`Next: ${next.name} (${next.number})`);
-                    setTimeout(() => handleCall(), 2000);
-                } else {
-                    toast.success("Auto-dialer complete!");
-                }
-            }
-        } catch (error) {
-            console.error("Failed to log call outcome:", error);
-            toast.error("Failed to log call");
-        }
-    };
-
 
     if (!isOpen) {
         return (
             <motion.button
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                className={cn(
-                    "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all",
-                    sipStatus === "connected"
-                        ? "bg-gradient-to-br from-green-500 to-green-600"
-                        : "bg-gradient-to-br from-primary to-primary/80",
-                    "text-white hover:shadow-xl"
-                )}
+                layoutId="dialer-bubble"
+                className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary shadow-xl flex items-center justify-center text-white"
                 onClick={openDialer}
+                title="Open Dialer"
             >
                 <Phone className="h-6 w-6" />
-                {sipStatus === "connected" && (
-                    <span className="absolute -top-1 -right-1 h-3 w-3 bg-green-400 rounded-full border-2 border-white animate-pulse" />
-                )}
+                {sipStatus === "connected" && <span className="absolute top-0 right-0 h-3 w-3 bg-green-500 rounded-full border-2 border-white" />}
             </motion.button>
         );
     }
@@ -335,367 +129,139 @@ export function CallWidget() {
     return (
         <AnimatePresence>
             <motion.div
-                initial={{ opacity: 0, y: 100, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 100, scale: 0.9 }}
-                className="fixed bottom-6 right-6 z-50 w-[340px] max-h-[80vh] rounded-2xl bg-gradient-to-b from-card to-card/95 border border-border/50 shadow-2xl overflow-hidden overflow-y-auto backdrop-blur-sm"
+                layoutId="dialer-container"
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className={cn(
+                    "fixed bottom-6 right-6 z-50 bg-background/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl overflow-hidden transition-all duration-500",
+                    isMinimized ? "w-16 h-16 rounded-full" : "w-[380px] h-[600px] max-h-[90vh]"
+                )}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between bg-gradient-to-r from-primary/10 to-primary/5 px-4 py-3 border-b border-border/50">
-                    <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
-                            <Phone className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                            <span className="font-semibold text-sm">
-                                {autoDialerActive ? "Auto-Dialer" : "Dialer"}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <StatusBadge sipStatus={sipStatus} />
-                                {isInCall && (
-                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        {durationDisplay}
-                                    </span>
-                                )}
+                {isMinimized ? (
+                    <button
+                        className="h-full w-full flex items-center justify-center"
+                        onClick={() => setIsMinimized(false)}
+                        title="Expand Dialer"
+                    >
+                        <Phone className="h-6 w-6 text-primary" />
+                    </button>
+                ) : (
+                    <div className="h-full flex flex-col">
+                        {/* Header */}
+                        <div className={cn(
+                            "px-5 py-4 flex items-center justify-between transition-all border-b border-white/5",
+                            autoDialerActive ? "bg-primary/10" : "bg-transparent"
+                        )}>
+                            <div className="flex flex-col gap-1">
+                                <h2 className="text-sm font-bold flex items-center gap-2">
+                                    {autoDialerActive ? "Power Dialer" : "Cloud Communications"}
+                                    {autoDialerActive && <Badge className="bg-primary hover:bg-primary h-4 px-1.5 text-[10px] uppercase">Auto</Badge>}
+                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <StatusBadge sipStatus={sipStatus} />
+                                    {isInCall && (
+                                        <Badge variant="outline" className="h-5 px-1.5 text-[11px] font-mono text-muted-foreground border-white/10 bg-white/5">
+                                            <Clock className="h-3 w-3 mr-1" /> {durationDisplay}
+                                        </Badge>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 rounded-full"
-                            onClick={() => setIsMinimized(!isMinimized)}
-                        >
-                            {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 rounded-full"
-                            onClick={closeDialer}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
 
-                {!isMinimized && (
-                    <div className="p-4 space-y-4">
-                        {/* Error Display */}
-                        {lastError && !isInCall && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20"
-                            >
-                                <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                                <p className="text-xs text-red-500">{lastError}</p>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 ml-auto"
-                                    onClick={() => setLastError(null)}
-                                >
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </motion.div>
-                        )}
-
-                        {/* Contact Info */}
-                        {contact && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                            >
-                                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                                    <User className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                    <p className="font-semibold">{contact.first_name} {contact.last_name}</p>
-                                    <p className="text-xs text-muted-foreground">{contact.company || "No Company"}</p>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {/* Number Display */}
-                        <div className="relative">
-                            <Input
-                                id="dialer-number"
-                                name="dialer-number"
-                                value={currentNumber}
-                                onChange={(e) => setCurrentNumber(e.target.value)}
-                                placeholder="Enter number..."
-                                className="text-center text-2xl font-mono tracking-widest h-14 bg-muted/30 border-muted"
-                            />
-                            {currentNumber && !isInCall && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full"
-                                    onClick={() => setCurrentNumber("")}
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
-
-                        {/* Quick Search (when not in call) */}
-                        {!isInCall && !showOutcomes && (
-                            <div className="space-y-2">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        id="contact-search"
-                                        name="contact-search"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Search contacts..."
-                                        className="pl-9 h-9 text-sm"
-                                    />
-                                </div>
-                                {searchQuery && filteredContacts && filteredContacts.length > 0 && (
-                                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                                        {filteredContacts.map((c) => (
-                                            <button
-                                                key={c.id}
-                                                onClick={() => handleQuickDial(c.phone!, `${c.first_name} ${c.last_name}`)}
-                                                className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
-                                            >
-                                                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
-                                                    <User className="h-3 w-3" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium truncate">{c.first_name} {c.last_name}</p>
-                                                    <p className="text-xs text-muted-foreground">{c.phone}</p>
-                                                </div>
-                                            </button>
-                                        ))}
+                            <div className="flex items-center gap-1">
+                                {autoDialerActive && (
+                                    <div className="flex items-center mr-2 px-1.5 py-1 bg-muted/40 rounded-lg gap-1 border border-white/5">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-background/50" onClick={toggleAutoDialerPause} title="Pause">
+                                            {isAutoDialerPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-background/50" onClick={skipCurrent} title="Skip">
+                                            <SkipForward className="h-3 w-3" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:text-destructive" onClick={terminateAutoDialer} title="Stop">
+                                            <Square className="h-3 w-3" />
+                                        </Button>
                                     </div>
                                 )}
-                            </div>
-                        )}
-
-                        {/* Call Status */}
-                        {isInCall && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="text-center py-2"
-                            >
-                                <motion.div
-                                    animate={{ opacity: [1, 0.5, 1] }}
-                                    transition={{ repeat: Infinity, duration: 1.5 }}
-                                    className={cn(
-                                        "text-sm font-medium flex items-center justify-center gap-2",
-                                        callStatus === "active" ? "text-green-500" : "text-yellow-500"
-                                    )}
-                                >
-                                    {callStatus === "connecting" && "Connecting..."}
-                                    {callStatus === "ringing" && "Ringing..."}
-                                    {callStatus === "active" && <><CheckCircle2 className="h-4 w-4" /> Connected</>}
-                                    {isOnHold && " (On Hold)"}
-                                </motion.div>
-                            </motion.div>
-                        )}
-
-                        {/* Outcome Selection */}
-                        {showOutcomes && !isInCall && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="space-y-3"
-                            >
-                                <p className="text-xs font-medium text-center text-muted-foreground">Select Call Outcome</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {callOutcomes.map((outcome) => (
-                                        <Button
-                                            key={outcome.value}
-                                            size="sm"
-                                            className={cn("text-white font-medium", outcome.color)}
-                                            onClick={() => handleOutcome(outcome)}
-                                        >
-                                            {outcome.label}
-                                        </Button>
-                                    ))}
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full"
-                                    onClick={() => {
-                                        setShowOutcomes(false);
-                                        endCall();
-                                    }}
-                                >
-                                    Skip Logging
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted/50" onClick={() => setIsMinimized(true)} title="Minimize">
+                                    <Minimize2 className="h-4 w-4" />
                                 </Button>
-                            </motion.div>
-                        )}
-
-                        {/* Dialpad */}
-                        {(!isInCall || showKeypad) && !showOutcomes && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="grid grid-cols-3 gap-2"
-                            >
-                                {dialpadKeys.flat().map((key) => (
-                                    <Button
-                                        key={key}
-                                        variant="outline"
-                                        className="h-14 text-lg font-semibold flex flex-col gap-0 hover:bg-primary/10 transition-all"
-                                        onClick={() => handleKeyPress(key)}
-                                    >
-                                        <span>{key}</span>
-                                        {dialpadLetters[key] && (
-                                            <span className="text-[10px] text-muted-foreground font-normal">
-                                                {dialpadLetters[key]}
-                                            </span>
-                                        )}
-                                    </Button>
-                                ))}
-                            </motion.div>
-                        )}
-
-                        {/* In-Call Controls */}
-                        {isInCall && !showKeypad && (
-                            <div className="grid grid-cols-4 gap-2">
-                                <Button
-                                    variant={isMuted ? "destructive" : "outline"}
-                                    size="icon"
-                                    className="h-12 w-full rounded-xl flex flex-col gap-1"
-                                    onClick={() => {
-                                        const newMuted = !isMuted;
-                                        setIsMuted(newMuted);
-                                        SipService.getInstance().mute(newMuted);
-                                    }}
-                                >
-                                    {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                                    <span className="text-[10px]">Mute</span>
-                                </Button>
-                                <Button
-                                    variant={isOnHold ? "secondary" : "outline"}
-                                    size="icon"
-                                    className="h-12 w-full rounded-xl flex flex-col gap-1"
-                                    onClick={handleHold}
-                                >
-                                    {isOnHold ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                                    <span className="text-[10px]">{isOnHold ? "Resume" : "Hold"}</span>
-                                </Button>
-                                <Button
-                                    variant={isSpeakerOn ? "outline" : "secondary"}
-                                    size="icon"
-                                    className="h-12 w-full rounded-xl flex flex-col gap-1"
-                                    onClick={() => {
-                                        setIsSpeakerOn(!isSpeakerOn);
-                                        const audioEl = document.getElementById("sip-remote-audio") as HTMLAudioElement;
-                                        if (audioEl) audioEl.muted = isSpeakerOn; // Toggle mute (opposite of speaker state)
-                                        toast.info(isSpeakerOn ? "Speaker off" : "Speaker on");
-                                    }}
-                                >
-                                    {isSpeakerOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                                    <span className="text-[10px]">Speaker</span>
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-12 w-full rounded-xl flex flex-col gap-1"
-                                    onClick={() => setShowKeypad(!showKeypad)}
-                                >
-                                    <Hash className="h-4 w-4" />
-                                    <span className="text-[10px]">Keypad</span>
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-12 w-full rounded-xl flex flex-col gap-1"
-                                    onClick={() => toast.info("Transfer feature coming soon")}
-                                >
-                                    <PhoneForwarded className="h-4 w-4" />
-                                    <span className="text-[10px]">Transfer</span>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive" onClick={closeDialer} title="Close">
+                                    <X className="h-4 w-4" />
                                 </Button>
                             </div>
-                        )}
-
-                        {/* Show keypad toggle when in call */}
-                        {isInCall && showKeypad && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full"
-                                onClick={() => setShowKeypad(false)}
-                            >
-                                Hide Keypad
-                            </Button>
-                        )}
-
-                        {/* Call / Hangup Button */}
-                        <div className="flex justify-center gap-2">
-                            {isInCall ? (
-                                <Button
-                                    variant="destructive"
-                                    className="flex-1 h-12 rounded-full"
-                                    onClick={handleHangup}
-                                >
-                                    <PhoneOff className="h-5 w-5 mr-2" />
-                                    End Call
-                                </Button>
-                            ) : !showOutcomes && (
-                                <>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="h-12 w-12 rounded-full"
-                                        onClick={() => setShowRecentCalls(!showRecentCalls)}
-                                    >
-                                        <History className="h-5 w-5" />
-                                    </Button>
-                                    <Button
-                                        className="flex-1 h-12 rounded-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
-                                        onClick={handleCall}
-                                        disabled={!currentNumber || sipStatus !== "connected"}
-                                    >
-                                        <Phone className="h-5 w-5 mr-2" />
-                                        {sipStatus !== "connected" ? "Connecting..." : "Call"}
-                                    </Button>
-                                </>
-                            )}
                         </div>
 
-                        {/* Recent Calls */}
-                        {showRecentCalls && !isInCall && recentCalls.length > 0 && (
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                className="space-y-1 max-h-40 overflow-y-auto border-t pt-3"
-                            >
-                                <p className="text-xs font-medium text-muted-foreground mb-2">Recent Calls</p>
-                                {recentCalls.map((call, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setCurrentNumber(call.number)}
-                                        className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
-                                    >
-                                        <div className={cn(
-                                            "h-2 w-2 rounded-full",
-                                            call.status === "answered" && "bg-green-500",
-                                            call.status === "no-answer" && "bg-yellow-500",
-                                            call.status === "failed" && "bg-red-500",
-                                            call.status === "dnd" && "bg-orange-500"
-                                        )} />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">{call.name || call.number}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {call.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </p>
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto px-5 pb-6 scrollbar-hide">
+                            {isInCall ? (
+                                <ActiveCall
+                                    contact={contact ? {
+                                        first_name: contact.first_name,
+                                        last_name: contact.last_name ?? "",
+                                        company: contact.company ?? ""
+                                    } : null}
+                                    status={callStatus}
+                                    duration={durationDisplay}
+                                    isMuted={isMuted}
+                                    onMuteToggle={() => {
+                                        const n = !isMuted;
+                                        setIsMuted(n);
+                                        SipService.getInstance().mute(n);
+                                    }}
+                                    isOnHold={isOnHold}
+                                    onHoldToggle={() => setIsOnHold(!isOnHold)}
+                                    isSpeakerOn={isSpeakerOn}
+                                    onSpeakerToggle={() => setIsSpeakerOn(!isSpeakerOn)}
+                                    showKeypad={showKeypad}
+                                    onKeypadToggle={() => setShowKeypad(!showKeypad)}
+                                    onHangup={handleHangup}
+                                />
+                            ) : (
+                                <Tabs defaultValue="dial" className="w-full mt-4">
+                                    <TabsList className="grid w-full grid-cols-2 bg-muted/30 p-1 mb-6 rounded-xl border border-white/5">
+                                        <TabsTrigger value="dial" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                            <LayoutGrid className="h-4 w-4 mr-2" /> Dialer
+                                        </TabsTrigger>
+                                        <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                            <HistoryIcon className="h-4 w-4 mr-2" /> History
+                                        </TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="dial" className="mt-0 outline-none">
+                                        <DialerPad
+                                            currentNumber={currentNumber}
+                                            onNumberChange={setCurrentNumber}
+                                            onKeyPress={(k) => setCurrentNumber(currentNumber + k)}
+                                            searchQuery={searchQuery}
+                                            onSearchChange={setSearchQuery}
+                                            searchResults={(searchResults?.data || []).map(c => ({
+                                                id: c.id,
+                                                first_name: c.first_name,
+                                                last_name: c.last_name ?? "",
+                                                phone: c.phone ?? "",
+                                                company: c.company ?? ""
+                                            }))}
+                                            onQuickDial={handleQuickDial}
+                                        />
+                                        <div className="mt-6 flex justify-center">
+                                            <Button
+                                                className="w-full h-14 rounded-2xl bg-primary text-white text-lg font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                                onClick={() => handleCall()}
+                                                disabled={!currentNumber || sipStatus !== "connected"}
+                                            >
+                                                <Phone className="mr-3 h-6 w-6" /> Dial Number
+                                            </Button>
                                         </div>
-                                    </button>
-                                ))}
-                            </motion.div>
-                        )}
+                                    </TabsContent>
+                                    <TabsContent value="history" className="mt-0 outline-none">
+                                        <CallHistory
+                                            calls={recentCalls}
+                                            onDial={handleQuickDial}
+                                            onClear={() => setRecentCalls([])}
+                                        />
+                                    </TabsContent>
+                                </Tabs>
+                            )}
+                        </div>
                     </div>
                 )}
             </motion.div>

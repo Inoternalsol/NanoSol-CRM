@@ -14,22 +14,32 @@ BEGIN
 END $$;
 
 -- ============================================
--- 1. SECURITY DEFINER FUNCTIONS (Avoid Recursion)
+-- 0.1 PERFORMANCE INDEXES (FOR RLS)
+-- ============================================
+CREATE INDEX IF NOT EXISTS idx_contacts_org_perf ON contacts(organization_id);
+CREATE INDEX IF NOT EXISTS idx_deals_org_perf ON deals(organization_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_org_perf ON tasks(organization_id);
+CREATE INDEX IF NOT EXISTS idx_activities_org_perf ON activities(organization_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id_perf ON profiles(user_id);
+
+-- ============================================
+-- 1. SECURITY DEFINER FUNCTIONS (STABLE for Performance)
 -- ============================================
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS text AS $$
+  -- Using STABLE ensures the value is cached within a single query's transaction
   SELECT role FROM public.profiles WHERE user_id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.get_current_user_org()
 RETURNS uuid AS $$
   SELECT organization_id FROM public.profiles WHERE user_id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.get_current_user_profile_id()
 RETURNS uuid AS $$
   SELECT id FROM public.profiles WHERE user_id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 -- ============================================
 -- 2. ORGANIZATIONS & PROFILES
@@ -135,6 +145,24 @@ DO $$ BEGIN
         ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
         CREATE POLICY "notes_admin" ON notes FOR ALL TO authenticated USING (public.get_current_user_role() IN ('admin', 'manager') AND organization_id = public.get_current_user_org());
         CREATE POLICY "notes_agent" ON notes FOR ALL TO authenticated USING (public.get_current_user_role() = 'agent' AND created_by = public.get_current_user_profile_id());
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'call_logs') THEN
+        ALTER TABLE call_logs ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "call_logs_admin" ON call_logs FOR ALL TO authenticated USING (public.get_current_user_role() IN ('admin', 'manager') AND organization_id = public.get_current_user_org());
+        CREATE POLICY "call_logs_agent" ON call_logs FOR ALL TO authenticated USING (public.get_current_user_role() = 'agent' AND user_id = public.get_current_user_profile_id());
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'workflows') THEN
+        ALTER TABLE workflows ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "workflows_admin" ON workflows FOR ALL TO authenticated USING (public.get_current_user_role() IN ('admin', 'manager') AND organization_id = public.get_current_user_org());
+        CREATE POLICY "workflows_agent" ON workflows FOR SELECT TO authenticated USING (organization_id = public.get_current_user_org());
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'workflow_runs') THEN
+        ALTER TABLE workflow_runs ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "runs_admin" ON workflow_runs FOR ALL TO authenticated USING (public.get_current_user_role() IN ('admin', 'manager') AND organization_id = public.get_current_user_org());
+        CREATE POLICY "runs_agent" ON workflow_runs FOR SELECT TO authenticated USING (organization_id = public.get_current_user_org());
     END IF;
 END $$;
 

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default function GlobalError({
     error,
@@ -35,10 +36,10 @@ export default function GlobalError({
                                 Try Again
                             </Button>
                             <Button variant="outline" size="lg" asChild>
-                                <a href="/">
+                                <Link href="/">
                                     <Home className="mr-2 h-4 w-4" />
                                     Go Home
-                                </a>
+                                </Link>
                             </Button>
                         </div>
                         {error.digest && (

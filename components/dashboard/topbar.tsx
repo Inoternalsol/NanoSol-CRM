@@ -25,15 +25,17 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import { useNotifications } from "@/hooks/use-notifications";
+// ... imports
+
 export function Topbar() {
     const router = useRouter();
     const supabase = createClient();
     const { theme, setTheme } = useTheme();
-    const [notifications] = useState([
-        { id: 1, title: "New Lead", description: "John Doe was added", time: "2m ago" },
-        { id: 2, title: "Deal Closed", description: "Enterprise Deal for $5k", time: "1h ago" },
-        { id: 3, title: "Meeting Reminder", description: "Strategy session at 3 PM", time: "3h ago" },
-    ]);
+
+    // Use Real-time Notifications Hook
+    const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications();
+
     const { open: openCommandPalette } = useCommandPaletteStore();
     const { openDialer } = useDialerStore();
     const { data: profile } = useActiveProfile();
@@ -93,82 +95,110 @@ export function Topbar() {
                     <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
                     <span className="sr-only">Toggle theme</span>
                 </Button>
-
-                {/* Notifications */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="relative">
-                            <Bell className="h-5 w-5" />
-                            {notifications.length > 0 && (
-                                <Badge
-                                    variant="destructive"
-                                    className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-                                >
-                                    {notifications.length}
-                                </Badge>
-                            )}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-80">
-                        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {notifications.map((n) => (
-                            <DropdownMenuItem key={n.id} className="flex flex-col items-start p-4 gap-1">
-                                <div className="flex w-full justify-between items-center">
-                                    <span className="font-medium">{n.title}</span>
-                                    <span className="text-[10px] text-muted-foreground">{n.time}</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground line-clamp-1">
-                                    {n.description}
-                                </p>
-                            </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <Link href="/dashboard" className="w-full">
-                            <DropdownMenuItem className="w-full text-center justify-center text-xs text-primary cursor-pointer">
-                                View all notifications
-                            </DropdownMenuItem>
-                        </Link>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* User Menu */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                            <Avatar className="h-9 w-9">
-                                <AvatarImage src={profile?.avatar_url} alt={profile?.full_name || "User"} />
-                                <AvatarFallback className="bg-primary/10 text-primary">{profile?.full_name?.[0] || "U"}</AvatarFallback>
-                            </Avatar>
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56" align="end" forceMount>
-                        <DropdownMenuLabel className="font-normal">
-                            <div className="flex flex-col space-y-1">
-                                <p className="text-sm font-medium leading-none">{profile?.full_name || "New User"}</p>
-                                <p className="text-xs leading-none text-muted-foreground">
-                                    {profile?.email || "demo@nanosol.app"}
-                                </p>
-                            </div>
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <Link href="/dashboard/settings">
-                            <DropdownMenuItem className="cursor-pointer">
-                                <User className="mr-2 h-4 w-4" />
-                                <span>Profile Settings</span>
-                            </DropdownMenuItem>
-                        </Link>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            className="text-destructive cursor-pointer"
-                            onClick={handleLogout}
-                        >
-                            <LogOut className="mr-2 h-4 w-4" />
-                            <span>Log out</span>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
             </div>
+
+            {/* Notifications */}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="relative">
+                        <Bell className="h-5 w-5" />
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                            >
+                                {unreadCount}
+                            </Badge>
+                        )}
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                    <div className="flex items-center justify-between px-4 py-2">
+                        <DropdownMenuLabel className="p-0">Notifications</DropdownMenuLabel>
+                        {unreadCount > 0 && (
+                            <Button variant="ghost" size="sm" className="h-auto px-2 text-[10px]" onClick={markAllRead}>
+                                Mark all read
+                            </Button>
+                        )}
+                    </div>
+                    <DropdownMenuSeparator />
+                    <div className="max-h-[300px] overflow-y-auto">
+                        {notifications.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-muted-foreground">
+                                No notifications
+                            </div>
+                        ) : (
+                            notifications.map((n) => (
+                                <DropdownMenuItem
+                                    key={n.id}
+                                    className={`flex flex-col items-start p-4 gap-1 cursor-pointer ${!n.is_read ? 'bg-muted/50' : ''}`}
+                                    onClick={() => {
+                                        markAsRead(n.id);
+                                        if (n.link) router.push(n.link);
+                                    }}
+                                >
+                                    <div className="flex w-full justify-between items-center">
+                                        <span className={`text-sm ${!n.is_read ? 'font-semibold' : ''}`}>{n.title}</span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                            {/* Simple time logic, consider date-fns for relative time */}
+                                            {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                        {n.message}
+                                    </p>
+                                </DropdownMenuItem>
+                            ))
+                        )}
+                    </div>
+                    <DropdownMenuSeparator />
+                    <Link href="/dashboard" className="w-full">
+                        <DropdownMenuItem className="w-full text-center justify-center text-xs text-primary cursor-pointer">
+                            View all notifications
+                        </DropdownMenuItem>
+                    </Link>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* ... User Menu ... */}
+
+
+            {/* User Menu */}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                        <Avatar className="h-9 w-9">
+                            <AvatarImage src={profile?.avatar_url} alt={profile?.full_name || "User"} />
+                            <AvatarFallback className="bg-primary/10 text-primary">{profile?.full_name?.[0] || "U"}</AvatarFallback>
+                        </Avatar>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                            <p className="text-sm font-medium leading-none">{profile?.full_name || "New User"}</p>
+                            <p className="text-xs leading-none text-muted-foreground">
+                                {profile?.email || "demo@nanosol.app"}
+                            </p>
+                        </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <Link href="/dashboard/settings">
+                        <DropdownMenuItem className="cursor-pointer">
+                            <User className="mr-2 h-4 w-4" />
+                            <span>Profile Settings</span>
+                        </DropdownMenuItem>
+                    </Link>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        className="text-destructive cursor-pointer"
+                        onClick={handleLogout}
+                    >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Log out</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </header>
     );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,7 +28,7 @@ import {
 import { useCreateEmailTemplate, useUpdateEmailTemplate } from "@/hooks/use-data";
 import { toast } from "sonner";
 import type { EmailTemplate } from "@/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Code2 } from "lucide-react";
 
 const templateSchema = z.object({
     name: z.string().min(1, "Template name is required"),
@@ -51,6 +53,7 @@ export function TemplateDialog({
     organizationId,
 }: TemplateDialogProps) {
     const isEditing = !!template;
+    const [showHtml, setShowHtml] = useState(false);
     const { trigger: createTemplate, isMutating: isCreating } = useCreateEmailTemplate();
     const { trigger: updateTemplate, isMutating: isUpdating } = useUpdateEmailTemplate();
     const isLoading = isCreating || isUpdating;
@@ -161,11 +164,23 @@ export function TemplateDialog({
                             name="body_html"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Email Body (HTML)</FormLabel>
+                                    <div className="flex items-center justify-between">
+                                        <FormLabel>Email Body {showHtml && <span className="text-xs text-muted-foreground ml-2">(HTML Mode)</span>}</FormLabel>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className={cn("h-8 text-xs", showHtml ? "bg-muted font-bold" : "")}
+                                            onClick={() => setShowHtml(!showHtml)}
+                                        >
+                                            <Code2 className="mr-2 h-3 w-3" />
+                                            Code View
+                                        </Button>
+                                    </div>
                                     <FormControl>
                                         <Textarea
-                                            placeholder="Write your email content..."
-                                            className="min-h-[200px] font-mono text-sm"
+                                            placeholder={showHtml ? "<html><body>...</body></html>" : "Write your email content..."}
+                                            className={cn("min-h-[200px]", showHtml ? "font-mono text-xs" : "text-sm")}
                                             {...field}
                                         />
                                     </FormControl>

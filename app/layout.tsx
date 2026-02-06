@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { ErrorSuppressor } from "@/components/providers/error-suppressor";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +20,23 @@ export const metadata: Metadata = {
   description:
     "A high-end, AI-powered CRM platform for managing contacts, deals, and communications.",
   keywords: ["CRM", "Sales", "Customer Management", "AI", "Automation"],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "NanoSol CRM",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport = {
+  themeColor: "#000000",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -38,6 +56,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ErrorSuppressor />
           {children}
           <Toaster position="top-right" />
         </ThemeProvider>

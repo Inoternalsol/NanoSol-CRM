@@ -1,0 +1,45 @@
+
+> nanosol-crm@0.1.0 build
+> next build
+
+ ΓÜá Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\Administrator\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\Administrator\OneDrive\Documents\Nano Sip\nanosol-crm\package-lock.json
+
+   Γû▓ Next.js 15.5.12
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ Γ£ô (serwist) Bundling the service worker script with the URL '/sw.js' and the scope '/'...
+Failed to compile.
+
+./app/api/automation/process/route.ts
+Module not found: Can't resolve 'nodemailer'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./app/api/email/send/route.ts
+Module not found: Can't resolve 'nodemailer'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./app/api/email/sync/route.ts
+Module not found: Can't resolve 'imapflow'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./app/api/email/sync/route.ts
+Module not found: Can't resolve 'mailparser'
+
+https://nextjs.org/docs/messages/module-not-found
+
+./app/api/sequences/process/route.ts
+Module not found: Can't resolve 'nodemailer'
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+> Build failed because of webpack errors

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import {
     Dialog,
     DialogContent,
@@ -60,7 +60,7 @@ export function ContactDialog({
         handleSubmit,
         reset,
         setValue,
-        watch,
+        control,
         formState: { errors },
     } = useForm<ContactFormData>({
         defaultValues: contact
@@ -84,6 +84,11 @@ export function ContactDialog({
                 status: "new",
                 lead_score: 0,
             },
+    });
+
+    const watchedStatus = useWatch({
+        control,
+        name: "status",
     });
 
     useEffect(() => {
@@ -233,7 +238,7 @@ export function ContactDialog({
                         <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
                             <Select
-                                value={watch("status")}
+                                value={watchedStatus}
                                 onValueChange={(value) => setValue("status", value)}
                             >
                                 <SelectTrigger>

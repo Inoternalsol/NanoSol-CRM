@@ -80,7 +80,7 @@ export function EventDialog({
             }
         }
         getUser();
-    }, []);
+    }, [supabase.auth]);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),

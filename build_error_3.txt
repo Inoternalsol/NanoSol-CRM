@@ -1,0 +1,107 @@
+
+> nanosol-crm@0.1.0 build
+> next build
+
+ ΓÜá Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\Administrator\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\Administrator\OneDrive\Documents\Nano Sip\nanosol-crm\package-lock.json
+
+   Γû▓ Next.js 15.5.12
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ Γ£ô (serwist) Bundling the service worker script with the URL '/sw.js' and the scope '/'...
+ Γ£ô Compiled successfully in 10.8s
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./app/api/automation/process/route.ts
+5:25  Warning: 'WorkflowRun' is defined but never used.  @typescript-eslint/no-unused-vars
+86:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+92:32  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+95:37  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+96:37  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+100:9  Error: 'runStatus' is never reassigned. Use 'const' instead.  prefer-const
+100:9  Warning: 'runStatus' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+101:9  Error: 'nextExecutionAt' is never reassigned. Use 'const' instead.  prefer-const
+101:9  Warning: 'nextExecutionAt' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+162:15  Warning: 'falseEdge' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+194:97  Warning: 'runId' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./app/api/email/send/route.ts
+110:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/api/public/leads/route.ts
+60:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+77:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+156:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/api/sequences/process/route.ts
+165:36  Error: A `require()` style import is forbidden.  @typescript-eslint/no-require-imports
+
+./app/api/settings/api-keys/route.ts
+96:14  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./app/api/settings/smtp/route.ts
+82:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/dashboard/settings/developer/page.tsx
+7:5  Warning: 'CardContent' is defined but never used.  @typescript-eslint/no-unused-vars
+8:5  Warning: 'CardDescription' is defined but never used.  @typescript-eslint/no-unused-vars
+10:5  Warning: 'CardTitle' is defined but never used.  @typescript-eslint/no-unused-vars
+47:8  Warning: React Hook useEffect has a missing dependency: 'fetchKeys'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+83:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+98:18  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+152:50  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+152:87  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+
+./app/dashboard/settings/integrations/page.tsx
+9:5  Warning: 'CardDescription' is defined but never used.  @typescript-eslint/no-unused-vars
+15:36  Warning: 'Check' is defined but never used.  @typescript-eslint/no-unused-vars
+30:11  Warning: 'router' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+40:8  Warning: React Hook useEffect has a missing dependency: 'fetchForms'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+105:18  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./app/dashboard/tasks/page.tsx
+10:5  Warning: 'Circle' is defined but never used.  @typescript-eslint/no-unused-vars
+11:5  Warning: 'Clock' is defined but never used.  @typescript-eslint/no-unused-vars
+49:26  Warning: 'setStatusFilter' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./components/dashboard/dialer/auto-dialer-controls.tsx
+3:44  Warning: 'UserMinus' is defined but never used.  @typescript-eslint/no-unused-vars
+13:9  Warning: 'callStatus' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./components/dashboard/topbar.tsx
+3:10  Warning: 'useState' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/email/email-composer-dialog.tsx
+6:10  Warning: 'cn' is defined but never used.  @typescript-eslint/no-unused-vars
+36:42  Warning: 'AlertCircle' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/email/sequence-dialog.tsx
+74:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+124:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+131:22  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./components/email/template-dialog.tsx
+62:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./components/tasks/task-board.tsx
+13:5  Warning: 'DragOverEvent' is defined but never used.  @typescript-eslint/no-unused-vars
+154:45  Error: Optional chain expressions can return undefined by design - using a non-null assertion is unsafe and wrong.  @typescript-eslint/no-non-null-asserted-optional-chain
+
+./components/tasks/task-column.tsx
+7:10  Warning: 'cn' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./components/tasks/task-dialog.tsx
+131:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+135:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./lib/rate-limit.ts
+93:55  Warning: 'windowMs' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules

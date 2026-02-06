@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
     Mail,
@@ -22,86 +22,55 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useEmailTemplates, useDeleteEmailTemplate, useEmailSequences, useActiveProfile } from "@/hooks/use-data";
+import { useEmailTemplates, useDeleteEmailTemplate, useEmailSequences, useActiveProfile, useDeleteEmailSequence, useUpdateEmailSequence, useSMTPConfigs } from "@/hooks/use-data";
+import { useRealtime } from "@/hooks/use-realtime";
+import { useEmails } from "@/hooks/use-inbox";
 import { TemplateDialog } from "@/components/email/template-dialog";
 import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
 import { SequenceDialog } from "@/components/email/sequence-dialog";
+import { SequenceEnrollmentsManager } from "@/components/email/sequence-enrollments-manager";
 import type { EmailTemplate, EmailSequence } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Play, Pause } from "lucide-react";
+
 
 // Note: Email inbox would need IMAP/API integration - templates work with database
 
-// Sample emails (inbox would need a separate integration - keeping mock for now)
-const mockEmails = [
-    {
-        id: "1",
-        from: { name: "John Smith", email: "john@acme.com", initials: "JS" },
-        subject: "Re: Q1 Proposal - Ready for Review",
-        preview:
-            "Hi, I've reviewed the proposal and have a few questions about the pricing structure...",
-        time: "10:30 AM",
-        isRead: false,
-        isStarred: true,
-        hasAttachment: true,
-        folder: "inbox",
-    },
-    {
-        id: "2",
-        from: { name: "Sarah Johnson", email: "sarah@techstart.io", initials: "SJ" },
-        subject: "Demo Follow-up",
-        preview:
-            "Thank you for the demo yesterday. Our team was impressed with the features...",
-        time: "Yesterday",
-        isRead: true,
-        isStarred: false,
-        hasAttachment: false,
-        folder: "inbox",
-    },
-    {
-        id: "3",
-        from: { name: "Michael Chen", email: "m.chen@globaltech.com", initials: "MC" },
-        subject: "Contract Questions",
-        preview:
-            "I have a few questions regarding the contract terms we discussed last week...",
-        time: "Yesterday",
-        isRead: true,
-        isStarred: false,
-        hasAttachment: true,
-        folder: "sent",
-    },
-    {
-        id: "4",
-        from: { name: "Emily Davis", email: "emily@innovate.co", initials: "ED" },
-        subject: "Meeting Request",
-        preview:
-            "Would you be available for a call next week to discuss the pilot program?",
-        time: "Jan 17",
-        isRead: true,
-        isStarred: true,
-        hasAttachment: false,
-        folder: "starred",
-    },
-];
-
+// Email folders type
 type EmailFolder = "inbox" | "sent" | "starred" | "archive" | "trash";
 
 export default function EmailPage() {
     const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
     const [composerOpen, setComposerOpen] = useState(false);
     const [sequenceOpen, setSequenceOpen] = useState(false);
+    const [enrollmentManagerOpen, setEnrollmentManagerOpen] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
     const [selectedSequence, setSelectedSequence] = useState<EmailSequence | null>(null);
     const [activeFolder, setActiveFolder] = useState<EmailFolder>("inbox");
+    const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isProcessingSequences, setIsProcessingSequences] = useState(false);
 
     const { data: templates = [], isLoading: templatesLoading, mutate: mutateTemplates } = useEmailTemplates();
     const { data: sequences = [], mutate: mutateSequences } = useEmailSequences();
+    const { data: smtpConfigs = [] } = useSMTPConfigs();
+    const { data: emails, isLoading: emailsLoading } = useEmails(activeFolder, selectedAccountId);
+
     const { trigger: deleteTemplate } = useDeleteEmailTemplate();
+    const { trigger: deleteSequence } = useDeleteEmailSequence();
+    const { trigger: updateSequence } = useUpdateEmailSequence();
     const { data: activeProfile } = useActiveProfile();
 
     const handleSync = () => {
@@ -112,17 +81,20 @@ export default function EmailPage() {
         }, 3000);
     };
 
-    const filteredEmails = mockEmails.filter((e) => {
-        if (activeFolder === "starred") return e.isStarred;
-        return e.folder === activeFolder;
-    });
+    // Helper to format date
+    const formatTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diff = now.getTime() - date.getTime();
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    const folderStats = {
-        inbox: mockEmails.filter((e) => e.folder === "inbox").length,
-        sent: mockEmails.filter((e) => e.folder === "sent").length,
-        starred: mockEmails.filter((e) => e.isStarred).length,
-        archive: mockEmails.filter((e) => e.folder === "archive").length,
-        trash: mockEmails.filter((e) => e.folder === "trash").length,
+        if (days === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (days === 1) {
+            return "Yesterday";
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
     };
 
     const handleNewTemplate = () => {
@@ -152,6 +124,80 @@ export default function EmailPage() {
             mutateTemplates();
         }
     };
+
+    const handleEditSequence = (sequence: EmailSequence) => {
+        setSelectedSequence(sequence);
+        setSequenceOpen(true);
+    };
+
+    const handleDeleteSequence = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this sequence?")) return;
+        try {
+            await deleteSequence(id);
+            mutateSequences();
+            toast.success("Sequence deleted");
+        } catch (error) {
+            console.error("Delete failed:", error);
+            toast.error("Failed to delete sequence");
+        }
+    };
+
+    const handleToggleSequence = async (sequence: EmailSequence) => {
+        try {
+            await updateSequence({
+                id: sequence.id,
+                updates: { is_active: !sequence.is_active }
+            });
+            mutateSequences();
+            toast.success(`Sequence ${!sequence.is_active ? "activated" : "paused"}`);
+        } catch (error) {
+            console.error("Toggle failed:", error);
+            toast.error("Failed to update sequence");
+        }
+    };
+
+    const handleProcessSequences = async () => {
+        setIsProcessingSequences(true);
+        try {
+            const response = await fetch("/api/sequences/process", { method: "POST" });
+            const result = await response.json();
+
+            if (result.success) {
+                if (result.processed === 0) {
+                    toast.info("No sequences due for processing", {
+                        description: result.message
+                    });
+                } else {
+                    toast.success("Sequence processing complete", {
+                        description: `Report: ${result.successCount} sent, ${result.failureCount} failed.`,
+                        duration: 5000,
+                    });
+                }
+                mutateSequences();
+            } else {
+                toast.error("Processing failed", {
+                    description: result.error || "Unknown error"
+                });
+            }
+        } catch (error) {
+            console.error("Process failed:", error);
+            toast.error("Failed to process sequences");
+        } finally {
+            setIsProcessingSequences(false);
+        }
+    };
+
+    const handleManageEnrollments = (sequence: EmailSequence) => {
+        setSelectedSequence(sequence);
+        setEnrollmentManagerOpen(true);
+    };
+
+    // Real-time synchronization
+    const realtimeKey = useMemo(() => (key: unknown) =>
+        typeof key === "string" && (key === "email-sequences" || key.startsWith("sequence-enrollments")),
+        []);
+    useRealtime("email_sequences", realtimeKey);
+    useRealtime("sequence_enrollments", realtimeKey);
     return (
         <motion.div
             initial={{ opacity: 0 }}
@@ -182,26 +228,24 @@ export default function EmailPage() {
                 {/* Sidebar */}
                 <Card className="lg:col-span-1">
                     <CardContent className="p-4">
+                        <h3 className="mb-2 px-2 text-sm font-semibold tracking-tight">
+                            Mailboxes
+                        </h3>
                         <div className="space-y-1">
                             <Button
                                 variant={activeFolder === "inbox" ? "secondary" : "ghost"}
                                 className="w-full justify-start"
                                 onClick={() => setActiveFolder("inbox")}
                             >
-                                <Inbox className="h-4 w-4 mr-2" />
+                                <Inbox className="mr-2 h-4 w-4" />
                                 Inbox
-                                {folderStats.inbox > 0 && (
-                                    <Badge variant="default" className="ml-auto">
-                                        {folderStats.inbox}
-                                    </Badge>
-                                )}
                             </Button>
                             <Button
                                 variant={activeFolder === "sent" ? "secondary" : "ghost"}
                                 className="w-full justify-start"
                                 onClick={() => setActiveFolder("sent")}
                             >
-                                <Send className="h-4 w-4 mr-2" />
+                                <Send className="mr-2 h-4 w-4" />
                                 Sent
                             </Button>
                             <Button
@@ -209,7 +253,7 @@ export default function EmailPage() {
                                 className="w-full justify-start"
                                 onClick={() => setActiveFolder("starred")}
                             >
-                                <Star className="h-4 w-4 mr-2" />
+                                <Star className="mr-2 h-4 w-4" />
                                 Starred
                             </Button>
                             <Button
@@ -217,7 +261,7 @@ export default function EmailPage() {
                                 className="w-full justify-start"
                                 onClick={() => setActiveFolder("archive")}
                             >
-                                <Archive className="h-4 w-4 mr-2" />
+                                <Archive className="mr-2 h-4 w-4" />
                                 Archive
                             </Button>
                             <Button
@@ -225,9 +269,32 @@ export default function EmailPage() {
                                 className="w-full justify-start"
                                 onClick={() => setActiveFolder("trash")}
                             >
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <Trash2 className="mr-2 h-4 w-4" />
                                 Trash
                             </Button>
+                        </div>
+                        <Separator className="my-4" />
+                        <h3 className="mb-2 px-2 text-sm font-semibold tracking-tight">
+                            Accounts
+                        </h3>
+                        <div className="space-y-1">
+                            <Button
+                                variant={selectedAccountId === "all" ? "secondary" : "ghost"}
+                                className="w-full justify-start text-xs"
+                                onClick={() => setSelectedAccountId("all")}
+                            >
+                                All Accounts
+                            </Button>
+                            {smtpConfigs?.map(account => (
+                                <Button
+                                    key={account.id}
+                                    variant={selectedAccountId === account.id ? "secondary" : "ghost"}
+                                    className="w-full justify-start text-xs truncate"
+                                    onClick={() => setSelectedAccountId(account.id)}
+                                >
+                                    {account.email_addr}
+                                </Button>
+                            ))}
                         </div>
 
                         <Separator className="my-4" />
@@ -295,65 +362,59 @@ export default function EmailPage() {
                                         </div>
                                     )}
                                     <ScrollArea className="h-[500px]">
-                                        {filteredEmails.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center py-24 text-center">
-                                                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted mb-4 opacity-50">
-                                                    <Mail className="h-10 w-10 text-muted-foreground" />
-                                                </div>
-                                                <h3 className="text-lg font-semibold">No emails found</h3>
-                                                <p className="text-sm text-muted-foreground max-w-xs mx-auto mb-6">
-                                                    It looks like your {activeFolder} is empty. Connect your IMAP server or check back later.
-                                                </p>
-                                                <Button variant="outline" onClick={handleSync}>
-                                                    Try Syncing Again
-                                                </Button>
+                                        {emailsLoading ? (
+                                            <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                                                <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                                                <span>Loading emails...</span>
+                                            </div>
+                                        ) : !emails || emails.length === 0 ? (
+                                            <div className="p-8 text-center text-muted-foreground">
+                                                No emails found in {activeFolder}.
                                             </div>
                                         ) : (
-                                            filteredEmails.map((email, index) => (
-                                                <div key={email.id}>
+                                            <div className="flex flex-col">
+                                                {emails.map((email) => (
                                                     <div
-                                                        className={`
-                                                            flex items-start gap-4 p-4 cursor-pointer hover:bg-muted/50 transition-colors
-                                                            ${!email.isRead ? "bg-primary/5" : ""}
-                                                          `}
+                                                        key={email.id}
+                                                        className={cn(
+                                                            "flex flex-col gap-1 p-4 border-b hover:bg-accent cursor-pointer transition-colors",
+                                                            !email.is_read && "bg-muted/50 font-medium"
+                                                        )}
                                                     >
-                                                        <Avatar>
-                                                            <AvatarFallback>
-                                                                {email.from.initials}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center justify-between mb-1">
-                                                                <span
-                                                                    className={`font-medium ${!email.isRead ? "text-foreground" : "text-muted-foreground"}`}
-                                                                >
-                                                                    {email.from.name}
-                                                                </span>
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    {email.time}
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <Avatar className="h-8 w-8">
+                                                                    <AvatarFallback>
+                                                                        {email.from_addr[0].toUpperCase()}
+                                                                    </AvatarFallback>
+                                                                </Avatar>
+                                                                <span className={cn("text-sm", !email.is_read && "font-semibold")}>
+                                                                    {email.from_addr}
                                                                 </span>
                                                             </div>
-                                                            <p
-                                                                className={`text-sm truncate ${!email.isRead ? "font-medium" : ""}`}
-                                                            >
-                                                                {email.subject}
-                                                            </p>
-                                                            <p className="text-sm text-muted-foreground truncate">
-                                                                {email.preview}
-                                                            </p>
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                                {email.isStarred && (
-                                                                    <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                                                                )}
-                                                                {email.hasAttachment && (
+                                                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                                {formatTime(email.received_at)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className="text-sm truncate flex-1">
+                                                                {email.subject || "(No Subject)"}
+                                                            </span>
+                                                            <div className="flex items-center gap-1">
+                                                                {email.has_attachment && (
                                                                     <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                                                )}
+                                                                {email.is_starred && (
+                                                                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                                                                 )}
                                                             </div>
                                                         </div>
+                                                        <p className="text-xs text-muted-foreground line-clamp-2">
+                                                            {(email.body_text || email.body_html || "").replace(/<[^>]*>?/gm, "").substring(0, 100)}
+                                                        </p>
                                                     </div>
-                                                    {index < filteredEmails.length - 1 && <Separator />}
-                                                </div>
-                                            ))
+                                                ))}
+                                            </div>
                                         )}
                                     </ScrollArea>
                                 </CardContent>
@@ -365,56 +426,144 @@ export default function EmailPage() {
                                 <CardHeader>
                                     <div className="flex items-center justify-between">
                                         <CardTitle>Email Sequences</CardTitle>
-                                        <Button size="sm" onClick={() => {
-                                            setSelectedSequence(null);
-                                            setSequenceOpen(true);
-                                        }}>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            New Sequence
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleProcessSequences}
+                                                disabled={isProcessingSequences}
+                                            >
+                                                {isProcessingSequences ? (
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                ) : (
+                                                    <Play className="h-4 w-4 mr-2" />
+                                                )}
+                                                Process Due
+                                            </Button>
+                                            <Button size="sm" onClick={() => {
+                                                setSelectedSequence(null);
+                                                setSequenceOpen(true);
+                                            }}>
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                New Sequence
+                                            </Button>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    {sequences.map((sequence) => (
-                                        <div
-                                            key={sequence.id}
-                                            className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                                    <Mail className="h-5 w-5 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium">{sequence.name}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {sequence.enrolled_count || 0} enrolled
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <div className="text-right">
-                                                    <p className="text-sm font-medium">
-                                                        {sequence.open_rate || 0}%
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Open Rate
-                                                    </p>
-                                                </div>
-                                                <Badge
-                                                    variant={
-                                                        sequence.is_active
-                                                            ? "default"
-                                                            : "secondary"
-                                                    }
-                                                >
-                                                    {sequence.is_active ? "active" : "paused"}
-                                                </Badge>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                                        {sequences.map((sequence) => (
+                                            <Card
+                                                key={sequence.id}
+                                                className="relative group overflow-hidden border-muted/60 hover:border-primary/50 hover:shadow-md transition-all duration-300"
+                                            >
+                                                <div className={cn(
+                                                    "absolute top-0 left-0 w-1 h-full transition-colors",
+                                                    sequence.is_active ? "bg-green-500" : "bg-muted"
+                                                )} />
+
+                                                <CardHeader className="pb-2">
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                                                                <Zap className="h-5 w-5" />
+                                                            </div>
+                                                            <div>
+                                                                <CardTitle className="text-lg leading-none mb-1">{sequence.name}</CardTitle>
+                                                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    {sequence.steps?.length || 0} steps • {sequence.enrolled_count || 0} enrolled
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Badge
+                                                            variant={sequence.is_active ? "default" : "secondary"}
+                                                            className={cn(
+                                                                "capitalize text-[10px] px-2 py-0",
+                                                                sequence.is_active ? "bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20" : ""
+                                                            )}
+                                                        >
+                                                            {sequence.is_active ? "active" : "paused"}
+                                                        </Badge>
+                                                    </div>
+                                                </CardHeader>
+
+                                                <CardContent>
+                                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                                        <div className="p-3 rounded-lg bg-muted/40 border border-muted/40">
+                                                            <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Open Rate</p>
+                                                            <div className="flex items-end gap-2">
+                                                                <span className="text-xl font-bold">{sequence.open_rate || 0}%</span>
+                                                                <div className="flex-1 mb-1.5">
+                                                                    <Progress value={sequence.open_rate || 0} className="h-1" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-3 rounded-lg bg-muted/40 border border-muted/40">
+                                                            <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Reply Rate</p>
+                                                            <div className="flex items-end gap-2">
+                                                                <span className="text-xl font-bold">0%</span>
+                                                                <div className="flex-1 mb-1.5 opacity-30">
+                                                                    <Progress value={0} className="h-1 bg-muted [&>div]:bg-green-500" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                                                        <div className="flex gap-1">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 px-2 text-xs"
+                                                                onClick={() => handleManageEnrollments(sequence)}
+                                                            >
+                                                                Enrollments
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                                onClick={() => handleEditSequence(sequence)}
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className={cn(
+                                                                    "h-8 px-2 text-xs",
+                                                                    sequence.is_active ? "text-orange-500 hover:text-orange-600 hover:bg-orange-50" : "text-green-500 hover:text-green-600 hover:bg-green-50"
+                                                                )}
+                                                                onClick={() => handleToggleSequence(sequence)}
+                                                            >
+                                                                {sequence.is_active ? (
+                                                                    <><Pause className="h-3.5 w-3.5 mr-1" /> Pause</>
+                                                                ) : (
+                                                                    <><Play className="h-3.5 w-3.5 mr-1" /> Resume</>
+                                                                )}
+                                                            </Button>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteSequence(sequence.id)}>
+                                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                                        Delete Sequence
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -509,6 +658,13 @@ export default function EmailPage() {
                 sequence={selectedSequence}
                 organizationId={activeProfile?.organization_id || ""}
                 onSuccess={() => mutateSequences()}
+            />
+
+            <SequenceEnrollmentsManager
+                open={enrollmentManagerOpen}
+                onOpenChange={setEnrollmentManagerOpen}
+                sequenceId={selectedSequence?.id || ""}
+                sequenceName={selectedSequence?.name || ""}
             />
         </motion.div>
     );

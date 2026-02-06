@@ -4,12 +4,12 @@
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
--- CREATE EXTENSION IF NOT EXISTS "vector"; -- Uncomment when pgvector is enabled
+CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- ============================================
 -- ORGANIZATIONS
 -- ============================================
-CREATE TABLE organizations (
+CREATE TABLE IF NOT EXISTS organizations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL, -- subdomain identifier
@@ -24,7 +24,7 @@ CREATE TABLE organizations (
 -- ============================================
 -- PROFILES (extends Supabase auth.users)
 -- ============================================
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
@@ -39,7 +39,7 @@ CREATE TABLE profiles (
 -- ============================================
 -- CONTACTS
 -- ============================================
-CREATE TABLE contacts (
+CREATE TABLE IF NOT EXISTS contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
@@ -52,18 +52,30 @@ CREATE TABLE contacts (
   custom_fields JSONB DEFAULT '{}',
   lead_score INTEGER DEFAULT 0,
   owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  embedding VECTOR(1536), -- For AI semantic search
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_contacts_org ON contacts(organization_id);
-CREATE INDEX idx_contacts_email ON contacts(email);
-CREATE INDEX idx_contacts_tags ON contacts USING GIN(tags);
+-- Ensure embedding column exists for existing tables
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='embedding') THEN
+        ALTER TABLE contacts ADD COLUMN embedding VECTOR(1536);
+    END IF;
+END $$;
+
+-- HNSW index for high-performance vector search
+CREATE INDEX IF NOT EXISTS idx_contacts_embedding ON contacts USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_org ON contacts(organization_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
+CREATE INDEX IF NOT EXISTS idx_contacts_tags ON contacts USING GIN(tags);
 
 -- ============================================
 -- PIPELINES & DEALS
 -- ============================================
-CREATE TABLE pipelines (
+CREATE TABLE IF NOT EXISTS pipelines (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -72,7 +84,7 @@ CREATE TABLE pipelines (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE deals (
+CREATE TABLE IF NOT EXISTS deals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
@@ -84,18 +96,30 @@ CREATE TABLE deals (
   probability INTEGER DEFAULT 0 CHECK (probability >= 0 AND probability <= 100),
   expected_close_date DATE,
   owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  embedding VECTOR(1536), -- For AI semantic search
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_deals_org ON deals(organization_id);
-CREATE INDEX idx_deals_pipeline ON deals(pipeline_id);
-CREATE INDEX idx_deals_stage ON deals(stage);
+-- Ensure embedding column exists for existing tables
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='deals' AND column_name='embedding') THEN
+        ALTER TABLE deals ADD COLUMN embedding VECTOR(1536);
+    END IF;
+END $$;
+
+-- HNSW index for deals
+CREATE INDEX IF NOT EXISTS idx_deals_embedding ON deals USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS idx_deals_org ON deals(organization_id);
+CREATE INDEX IF NOT EXISTS idx_deals_pipeline ON deals(pipeline_id);
+CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage);
 
 -- ============================================
 -- ACTIVITIES (Unified Timeline)
 -- ============================================
-CREATE TABLE activities (
+CREATE TABLE IF NOT EXISTS activities (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
@@ -108,16 +132,16 @@ CREATE TABLE activities (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_activities_org ON activities(organization_id);
-CREATE INDEX idx_activities_contact ON activities(contact_id);
-CREATE INDEX idx_activities_deal ON activities(deal_id);
-CREATE INDEX idx_activities_type ON activities(type);
-CREATE INDEX idx_activities_created ON activities(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activities_org ON activities(organization_id);
+CREATE INDEX IF NOT EXISTS idx_activities_contact ON activities(contact_id);
+CREATE INDEX IF NOT EXISTS idx_activities_deal ON activities(deal_id);
+CREATE INDEX IF NOT EXISTS idx_activities_type ON activities(type);
+CREATE INDEX IF NOT EXISTS idx_activities_created ON activities(created_at DESC);
 
 -- ============================================
 -- TASKS
 -- ============================================
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
@@ -132,14 +156,14 @@ CREATE TABLE tasks (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_tasks_org ON tasks(organization_id);
-CREATE INDEX idx_tasks_assigned ON tasks(assigned_to);
-CREATE INDEX idx_tasks_due ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_org ON tasks(organization_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);
 
 -- ============================================
 -- CALENDAR EVENTS
 -- ============================================
-CREATE TABLE calendar_events (
+CREATE TABLE IF NOT EXISTS calendar_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -153,13 +177,13 @@ CREATE TABLE calendar_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_events_org ON calendar_events(organization_id);
-CREATE INDEX idx_events_time ON calendar_events(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_events_org ON calendar_events(organization_id);
+CREATE INDEX IF NOT EXISTS idx_events_time ON calendar_events(start_time, end_time);
 
 -- ============================================
 -- SIP PROFILES (Encrypted)
 -- ============================================
-CREATE TABLE sip_profiles (
+CREATE TABLE IF NOT EXISTS sip_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -175,7 +199,7 @@ CREATE TABLE sip_profiles (
 -- ============================================
 -- SMTP CONFIGURATIONS
 -- ============================================
-CREATE TABLE smtp_configs (
+CREATE TABLE IF NOT EXISTS smtp_configs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   host TEXT NOT NULL,
@@ -192,7 +216,7 @@ CREATE TABLE smtp_configs (
 -- ============================================
 -- EMAIL TEMPLATES
 -- ============================================
-CREATE TABLE email_templates (
+CREATE TABLE IF NOT EXISTS email_templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -206,7 +230,7 @@ CREATE TABLE email_templates (
 -- ============================================
 -- EMAIL SEQUENCES
 -- ============================================
-CREATE TABLE email_sequences (
+CREATE TABLE IF NOT EXISTS email_sequences (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -215,7 +239,7 @@ CREATE TABLE email_sequences (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE sequence_enrollments (
+CREATE TABLE IF NOT EXISTS sequence_enrollments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sequence_id UUID NOT NULL REFERENCES email_sequences(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
@@ -229,7 +253,7 @@ CREATE TABLE sequence_enrollments (
 -- ============================================
 -- AUTOMATION RULES
 -- ============================================
-CREATE TABLE automation_rules (
+CREATE TABLE IF NOT EXISTS automation_rules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -243,7 +267,7 @@ CREATE TABLE automation_rules (
 -- ============================================
 -- FILES/NOTES
 -- ============================================
-CREATE TABLE files (
+CREATE TABLE IF NOT EXISTS files (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
@@ -256,7 +280,7 @@ CREATE TABLE files (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE notes (
+CREATE TABLE IF NOT EXISTS notes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
@@ -297,92 +321,117 @@ RETURNS UUID AS $$
 $$ LANGUAGE SQL SECURITY DEFINER;
 
 -- Profiles: Users can view profiles in their org
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
 CREATE POLICY "profiles_select" ON profiles FOR SELECT
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "profiles_update_own" ON profiles;
 CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE
   USING (user_id = auth.uid());
 
 -- Organizations: Users can view their own org
+DROP POLICY IF EXISTS "org_select" ON organizations;
 CREATE POLICY "org_select" ON organizations FOR SELECT
   USING (id = get_user_org_id());
 
 -- Contacts: Full CRUD for org members
+DROP POLICY IF EXISTS "contacts_select" ON contacts;
 CREATE POLICY "contacts_select" ON contacts FOR SELECT
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "contacts_insert" ON contacts;
 CREATE POLICY "contacts_insert" ON contacts FOR INSERT
   WITH CHECK (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "contacts_update" ON contacts;
 CREATE POLICY "contacts_update" ON contacts FOR UPDATE
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "contacts_delete" ON contacts;
 CREATE POLICY "contacts_delete" ON contacts FOR DELETE
   USING (organization_id = get_user_org_id());
 
 -- Deals: Full CRUD for org members
+DROP POLICY IF EXISTS "deals_select" ON deals;
 CREATE POLICY "deals_select" ON deals FOR SELECT
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "deals_insert" ON deals;
 CREATE POLICY "deals_insert" ON deals FOR INSERT
   WITH CHECK (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "deals_update" ON deals;
 CREATE POLICY "deals_update" ON deals FOR UPDATE
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "deals_delete" ON deals;
 CREATE POLICY "deals_delete" ON deals FOR DELETE
   USING (organization_id = get_user_org_id());
 
 -- Pipelines
+DROP POLICY IF EXISTS "pipelines_select" ON pipelines;
 CREATE POLICY "pipelines_select" ON pipelines FOR SELECT
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "pipelines_insert" ON pipelines;
 CREATE POLICY "pipelines_insert" ON pipelines FOR INSERT
   WITH CHECK (organization_id = get_user_org_id());
 
 -- Activities
+DROP POLICY IF EXISTS "activities_select" ON activities;
 CREATE POLICY "activities_select" ON activities FOR SELECT
   USING (organization_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "activities_insert" ON activities;
 CREATE POLICY "activities_insert" ON activities FOR INSERT
   WITH CHECK (organization_id = get_user_org_id());
 
 -- Tasks
+DROP POLICY IF EXISTS "tasks_all" ON tasks;
 CREATE POLICY "tasks_all" ON tasks FOR ALL
   USING (organization_id = get_user_org_id());
 
 -- Calendar Events
+DROP POLICY IF EXISTS "events_all" ON calendar_events;
 CREATE POLICY "events_all" ON calendar_events FOR ALL
   USING (organization_id = get_user_org_id());
 
 -- SIP Profiles (user can only access their own)
+DROP POLICY IF EXISTS "sip_select" ON sip_profiles;
 CREATE POLICY "sip_select" ON sip_profiles FOR SELECT
   USING (user_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "sip_insert" ON sip_profiles;
 CREATE POLICY "sip_insert" ON sip_profiles FOR INSERT
   WITH CHECK (user_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()));
 
 -- SMTP (org-level, admin only would need additional check)
+DROP POLICY IF EXISTS "smtp_select" ON smtp_configs;
 CREATE POLICY "smtp_select" ON smtp_configs FOR SELECT
   USING (organization_id = get_user_org_id());
 
 -- Email Templates
+DROP POLICY IF EXISTS "templates_all" ON email_templates;
 CREATE POLICY "templates_all" ON email_templates FOR ALL
   USING (organization_id = get_user_org_id());
 
 -- Email Sequences
+DROP POLICY IF EXISTS "sequences_all" ON email_sequences;
 CREATE POLICY "sequences_all" ON email_sequences FOR ALL
   USING (organization_id = get_user_org_id());
 
 -- Automation Rules
+DROP POLICY IF EXISTS "automation_all" ON automation_rules;
 CREATE POLICY "automation_all" ON automation_rules FOR ALL
   USING (organization_id = get_user_org_id());
 
 -- Files
+DROP POLICY IF EXISTS "files_all" ON files;
 CREATE POLICY "files_all" ON files FOR ALL
   USING (organization_id = get_user_org_id());
 
 -- Notes
+DROP POLICY IF EXISTS "notes_all" ON notes;
 CREATE POLICY "notes_all" ON notes FOR ALL
   USING (organization_id = get_user_org_id());
 
@@ -400,27 +449,35 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to relevant tables
+DROP TRIGGER IF EXISTS set_updated_at ON organizations;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON profiles;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON contacts;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON contacts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON deals;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON deals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON tasks;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON smtp_configs;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON smtp_configs
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON email_templates;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON email_templates
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON notes;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON notes
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
@@ -442,5 +499,72 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS deal_stage_change ON deals;
 CREATE TRIGGER deal_stage_change AFTER UPDATE ON deals
   FOR EACH ROW EXECUTE FUNCTION log_deal_stage_change();
+
+-- ============================================
+-- AI SEMANTIC SEARCH FUNCTIONS
+-- ============================================
+
+-- Match contacts using vector similarity
+CREATE OR REPLACE FUNCTION match_contacts (
+  query_embedding VECTOR(1536),
+  match_threshold FLOAT,
+  match_count INT,
+  p_organization_id UUID
+)
+RETURNS TABLE (
+  id UUID,
+  first_name TEXT,
+  last_name TEXT,
+  company TEXT,
+  similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    contacts.id,
+    contacts.first_name,
+    contacts.last_name,
+    contacts.company,
+    1 - (contacts.embedding <=> query_embedding) AS similarity
+  FROM contacts
+  WHERE contacts.organization_id = p_organization_id
+    AND 1 - (contacts.embedding <=> query_embedding) > match_threshold
+  ORDER BY contacts.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+-- Match deals using vector similarity
+CREATE OR REPLACE FUNCTION match_deals (
+  query_embedding VECTOR(1536),
+  match_threshold FLOAT,
+  match_count INT,
+  p_organization_id UUID
+)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  value DECIMAL(15,2),
+  similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    deals.id,
+    deals.name,
+    deals.value,
+    1 - (deals.embedding <=> query_embedding) AS similarity
+  FROM deals
+  WHERE deals.organization_id = p_organization_id
+    AND 1 - (deals.embedding <=> query_embedding) > match_threshold
+  ORDER BY deals.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;

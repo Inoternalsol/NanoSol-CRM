@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtime } from "./use-realtime";
 import type { CalendarEvent } from "@/types";
 
 const supabase = createClient();
@@ -25,9 +26,13 @@ async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
 // ============================================
 
 export function useCalendarEvents() {
-    return useSWR<CalendarEvent[]>("calendar-events", fetchCalendarEvents, {
+    const swr = useSWR<CalendarEvent[]>("calendar-events", fetchCalendarEvents, {
         revalidateOnFocus: false,
     });
+
+    useRealtime("calendar_events", "calendar-events");
+
+    return swr;
 }
 
 // ============================================

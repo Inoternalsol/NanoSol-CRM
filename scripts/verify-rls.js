@@ -1,4 +1,4 @@
-
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config({ path: '.env.local' });
 
@@ -13,7 +13,7 @@ async function verifyRls() {
         const tables = ['contacts', 'deals', 'tasks', 'activities', 'profiles'];
 
         for (const table of tables) {
-            const { data, error } = await supabase.rpc('get_table_rls_status', { table_name: table });
+            await supabase.rpc('get_table_rls_status', { table_name: table });
             // Since I don't have that RPC, I'll use a direct query to pg_tables/pg_class if possible
             // But I can't run arbitrary SQL via supabase-js unless I have an RPC.
             // Let's try to fetch something with and without a user session.

@@ -147,6 +147,7 @@ export function ImportDialog({
                             className="hidden"
                             accept=".csv"
                             onChange={handleFileChange}
+                            aria-label="Upload CSV file"
                         />
                         <div className="p-4 rounded-full bg-primary/10">
                             <Upload className="h-8 w-8 text-primary" />

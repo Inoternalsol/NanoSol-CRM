@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtime } from "./use-realtime";
 import type { Contact, ContactStatus } from "@/types";
 
 const supabase = createClient();
@@ -98,6 +100,16 @@ async function fetchContact(id: string): Promise<Contact | null> {
     return data;
 }
 
+async function fetchContactByPhone(phone: string): Promise<Contact | null> {
+    const { data, error } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("phone", phone)
+        .maybeSingle();
+    if (error) throw error;
+    return data;
+}
+
 async function fetchContactStatuses(): Promise<ContactStatus[]> {
     const { data, error } = await supabase
         .from("contact_statuses")
@@ -117,6 +129,16 @@ async function fetchContactStatuses(): Promise<ContactStatus[]> {
     return data || [];
 }
 
+async function fetchContactCount(profileId?: string, isAdmin?: boolean): Promise<number> {
+    let query = supabase.from("contacts").select("*", { count: "exact", head: true });
+    if (!isAdmin && profileId) {
+        query = query.eq("owner_id", profileId);
+    }
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
+}
+
 // ============================================
 // SWR HOOKS
 // ============================================
@@ -125,10 +147,18 @@ async function fetchContactStatuses(): Promise<ContactStatus[]> {
  * Fetch all contacts (legacy, no pagination)
  */
 export function useContacts() {
-    return useSWR<Contact[]>("contacts", fetchContacts, {
+    const swr = useSWR<Contact[]>("contacts", fetchContacts, {
         revalidateOnFocus: false,
         dedupingInterval: 5000,
     });
+
+    const realtimeKey = useMemo(() => (key: unknown) =>
+        typeof key === "string" && (key === "contacts" || key.startsWith("contact-") || key.startsWith("contacts-paginated")),
+        []);
+
+    useRealtime("contacts", realtimeKey);
+
+    return swr;
 }
 
 /**
@@ -154,10 +184,30 @@ export function useContact(id: string | null) {
     );
 }
 
+export function useContactByPhone(phone: string | null) {
+    return useSWR<Contact | null>(
+        phone ? `contact-phone-${phone}` : null,
+        () => (phone ? fetchContactByPhone(phone) : null),
+        { revalidateOnFocus: false }
+    );
+}
+
 export function useContactStatuses() {
-    return useSWR<ContactStatus[]>("contact-statuses", fetchContactStatuses, {
+    const swr = useSWR<ContactStatus[]>("contact-statuses", fetchContactStatuses, {
         revalidateOnFocus: false,
     });
+
+    useRealtime("contact_statuses", "contact-statuses");
+
+    return swr;
+}
+
+export function useContactCount(profileId?: string, isAdmin?: boolean) {
+    return useSWR<number>(
+        profileId ? `contact-count-${profileId}-${isAdmin}` : null,
+        () => fetchContactCount(profileId, isAdmin),
+        { revalidateOnFocus: false, dedupingInterval: 10000 }
+    );
 }
 
 // ============================================

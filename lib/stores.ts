@@ -54,10 +54,14 @@ interface DialerState {
     startCallTimer: () => void;
     stopCallTimer: () => void;
     setAutoDialerQueue: (queue: { number: string; name: string }[]) => void;
-    updateQueueStatus: (number: string, status: "answered" | "no-answer" | "dnd" | "failed") => void;
+    updateQueueStatus: (number: string, status: "answered" | "no-answer" | "dnd" | "failed" | "skipped") => void;
     startAutoDialer: () => void;
     stopAutoDialer: () => void;
     nextAutoDialNumber: () => { number: string; name: string } | undefined;
+    isAutoDialerPaused: boolean;
+    toggleAutoDialerPause: () => void;
+    terminateAutoDialer: () => void;
+    skipCurrent: () => void;
 }
 
 export const useDialerStore = create<DialerState>((set, get) => ({
@@ -118,13 +122,33 @@ export const useDialerStore = create<DialerState>((set, get) => ({
     })),
     startAutoDialer: () => set({ autoDialerActive: true }),
     stopAutoDialer: () => set({ autoDialerActive: false }),
+    isAutoDialerPaused: false,
+    toggleAutoDialerPause: () => set((state) => ({ isAutoDialerPaused: !state.isAutoDialerPaused })),
+    terminateAutoDialer: () => set({ autoDialerActive: false, isAutoDialerPaused: false, autoDialerQueue: [] }),
     nextAutoDialNumber: () => {
-        const queue = get().autoDialerQueue;
+        const state = get();
+        // If paused, don't advance
+        if (state.isAutoDialerPaused) return undefined;
+
+        const queue = state.autoDialerQueue;
         const pending = queue.filter(q => !q.lastStatus);
         if (pending.length === 0) return undefined;
         const next = pending[0];
         set({ currentNumber: next.number });
         return next;
+    },
+    skipCurrent: () => {
+        const state = get();
+        if (state.currentNumber) {
+            // Mark current as skipped
+            state.updateQueueStatus(state.currentNumber, "skipped");
+            // End call if active
+            if (state.isInCall) {
+                state.endCall();
+            }
+            // Clear current number to trigger next fetch
+            set({ currentNumber: "" });
+        }
     },
 }));
 

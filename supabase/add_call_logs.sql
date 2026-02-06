@@ -39,6 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_call_logs_started_at ON public.call_logs(started_
 ALTER TABLE public.call_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+DROP POLICY IF EXISTS "Users can view own org call logs" ON public.call_logs;
 CREATE POLICY "Users can view own org call logs"
 ON public.call_logs FOR SELECT
 USING (
@@ -47,6 +48,7 @@ USING (
     )
 );
 
+DROP POLICY IF EXISTS "Users can insert call logs for own org" ON public.call_logs;
 CREATE POLICY "Users can insert call logs for own org"
 ON public.call_logs FOR INSERT
 WITH CHECK (
@@ -55,6 +57,7 @@ WITH CHECK (
     )
 );
 
+DROP POLICY IF EXISTS "Users can update own call logs" ON public.call_logs;
 CREATE POLICY "Users can update own call logs"
 ON public.call_logs FOR UPDATE
 USING (

@@ -16,7 +16,6 @@ import { toast } from "sonner";
 import {
     useContactStatuses,
     useCreateContactStatus,
-    useUpdateContactStatus,
     useDeleteContactStatus
 } from "@/hooks/use-data";
 import { Separator } from "@/components/ui/separator";
@@ -52,9 +51,10 @@ export function StatusManagementDialog({
             setNewStatusLabel("");
             toast.success("Status added");
             mutate();
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error adding status:", error);
-            toast.error(`Failed to add status: ${error.message || "Unknown error"}`);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Failed to add status: ${message}`);
         }
     };
 
@@ -68,9 +68,10 @@ export function StatusManagementDialog({
             await deleteStatus(id);
             toast.success("Status deleted");
             mutate();
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error deleting status:", error);
-            toast.error(`Failed to delete status: ${error.message || "Unknown error"}`);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Failed to delete status: ${message}`);
         }
     };
 

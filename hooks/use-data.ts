@@ -23,10 +23,12 @@ export {
     useCreateContact,
     useUpdateContact,
     useDeleteContact,
+    useContactByPhone,
     useBulkCreateContacts,
     useCreateContactStatus,
     useUpdateContactStatus,
     useDeleteContactStatus,
+    useContactCount,
 } from "./use-contacts";
 
 // Re-export pagination types
@@ -46,6 +48,7 @@ export {
     useCreateTask,
     useCompleteTask,
     useCreateActivity,
+    useDealStats,
 } from "./use-deals";
 
 // Calendar
@@ -64,6 +67,12 @@ export {
     useCreateEmailTemplate,
     useUpdateEmailTemplate,
     useDeleteEmailTemplate,
+    useSequenceEnrollments,
+    useEnrollInSequence,
+    useUpdateEnrollment,
+    useDeleteEnrollment,
+    useSMTPConfigs,
+    useSaveEmailAccount,
 } from "./use-email";
 
 // Call Logs
@@ -88,6 +97,8 @@ export {
     useUpdateSipProfile,
     useUpdateSmtpConfig,
     useUpdateApiKeys,
+    useIntegrations,
+    useSyncCalendar,
 } from "./use-settings";
 
 // Automation Rules

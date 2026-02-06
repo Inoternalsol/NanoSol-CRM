@@ -41,6 +41,8 @@ export interface Contact {
     lead_score?: number | null;
     status?: string | null;
     owner_id?: string | null;
+    last_call_status?: string | null;
+    last_call_at?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -122,21 +124,32 @@ export interface Activity {
 // Tasks & Events
 export interface Task {
     id: string;
-    organization_id: string;
-    contact_id?: string;
-    deal_id?: string;
-    title: string;
-    description?: string;
-    due_date?: string;
-    priority: "low" | "medium" | "high";
-    status: "pending" | "in_progress" | "completed";
-    assigned_to?: {
-        id: string;
-        full_name: string;
-        avatar_url?: string;
-    } | null;
     created_at: string;
-    updated_at: string;
+    title: string;
+    description: string | null;
+    status: "pending" | "in_progress" | "completed";
+    priority: "low" | "medium" | "high";
+    due_date: string | null;
+    assigned_to_id: string | null;
+    contact_id: string | null;
+    deal_id: string | null;
+    organization_id: string;
+    position?: number;
+    // Relations
+    assigned_to?: Profile;
+    contact?: Contact;
+    deal?: Deal;
+}
+
+export interface WebForm {
+    id: string;
+    organization_id: string;
+    name: string;
+    source: string;
+    redirect_url: string | null;
+    status: "active" | "inactive";
+    config: Record<string, string>;
+    created_at: string;
 }
 
 export interface CalendarEvent {
@@ -172,16 +185,27 @@ export interface SIPProfile {
 export interface SMTPConfig {
     id: string;
     organization_id: string;
-    host: string;
-    port: number;
-    username: string;
-    password_encrypted?: string;
-    use_tls: boolean;
+    user_id?: string;
+    name?: string;
     from_name?: string;
-    from_email?: string;
+    email_addr: string;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_user: string;
+    smtp_pass_encrypted?: string;
+    use_tls: boolean;
+    imap_host?: string;
+    imap_port?: number;
+    imap_user?: string;
+    imap_pass_encrypted?: string;
+    is_org_wide: boolean;
+    is_active: boolean;
+    last_sync_at?: string;
     created_at: string;
     updated_at: string;
 }
+
+export type EmailAccount = SMTPConfig;
 
 export interface EmailTemplate {
     id: string;
@@ -200,20 +224,71 @@ export interface EmailSequence {
     name: string;
     steps: EmailSequenceStep[];
     is_active: boolean;
+    smtp_config_id?: string;
     enrolled_count?: number; // Optional analytics
     open_rate?: number;     // Optional analytics
     created_at: string;
+    updated_at: string;
 }
 
 export interface EmailSequenceStep {
     id: string;
     order: number;
-    delay_days: number;
+    delay_days: number; // Duration value
+    delay_unit?: 'minutes' | 'hours' | 'days'; // Duration unit (default: days)
     template_id: string;
     subject_override?: string;
 }
 
+export interface SequenceEnrollment {
+    id: string;
+    organization_id: string;
+    sequence_id: string;
+    contact_id: string;
+    status: "active" | "paused" | "completed";
+    current_step: number;
+    next_send_at?: string;
+    created_at: string;
+    updated_at: string;
+    // Joined relations
+    contact?: {
+        id: string;
+        first_name: string;
+        last_name?: string | null;
+        email?: string | null;
+    } | null;
+    sequence?: {
+        id: string;
+        name: string;
+    } | null;
+}
+
 // Automation
+export interface Workflow {
+    id: string;
+    organization_id: string;
+    name: string;
+    description?: string;
+    nodes: unknown[]; // React Flow nodes
+    edges: unknown[]; // React Flow edges
+    is_active: boolean;
+    created_by?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface WorkflowRun {
+    id: string;
+    organization_id: string;
+    workflow_id: string;
+    contact_id: string;
+    status: 'running' | 'completed' | 'failed' | 'waiting';
+    current_node_id?: string;
+    last_executed_at: string;
+    metadata?: Record<string, unknown>;
+    created_at: string;
+}
+
 export interface AutomationRule {
     id: string;
     organization_id: string;
@@ -267,6 +342,18 @@ export interface APIKeys {
     qwen_key_encrypted?: string;
     kimi_key_encrypted?: string;
     active_provider: AIProvider;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UserIntegration {
+    id: string;
+    user_id: string;
+    organization_id: string;
+    provider: "google" | "outlook";
+    external_email?: string;
+    expires_at?: string;
+    metadata?: Record<string, any>;
     created_at: string;
     updated_at: string;
 }

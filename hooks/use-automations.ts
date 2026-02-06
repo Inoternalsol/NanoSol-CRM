@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtime } from "./use-realtime";
 import type { AutomationRule } from "@/types";
 
 const supabase = createClient();
@@ -25,9 +26,13 @@ async function fetchAutomationRules(): Promise<AutomationRule[]> {
 // ============================================
 
 export function useAutomationRules() {
-    return useSWR<AutomationRule[]>("automation-rules", fetchAutomationRules, {
+    const swr = useSWR<AutomationRule[]>("automation-rules", fetchAutomationRules, {
         revalidateOnFocus: false,
     });
+
+    useRealtime("automation_rules", "automation-rules");
+
+    return swr;
 }
 
 // ============================================

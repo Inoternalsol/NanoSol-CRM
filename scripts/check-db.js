@@ -1,6 +1,7 @@
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '.env.local' });
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
 async function checkProfiles() {
     try {
@@ -32,6 +33,20 @@ async function checkProfiles() {
 
         const { count: contactCount } = await supabase.from('contacts').select('*', { count: 'exact', head: true });
         const { count: dealCount } = await supabase.from('deals').select('*', { count: 'exact', head: true });
+
+        console.log('Checking email_sequences schema...');
+        const { data: sequence, error: seqError } = await supabase
+            .from('email_sequences')
+            .select('*')
+            .limit(1)
+            .single();
+
+        if (seqError) {
+            console.log('Error or no sequences:', seqError.message);
+        } else if (sequence) {
+            console.log('Sample sequence columns:', Object.keys(sequence).join(', '));
+            console.log(`smtp_config_id exists: ${'smtp_config_id' in sequence}`);
+        }
 
         console.log(`STATS: CONTACTS=${contactCount} | DEALS=${dealCount}`);
         process.exit(0);

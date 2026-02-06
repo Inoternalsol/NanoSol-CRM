@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtime } from "./use-realtime";
 import type { Deal, Pipeline, Task, Activity } from "@/types";
 
 const supabase = createClient();
@@ -136,6 +138,20 @@ async function fetchTasks(status?: string): Promise<Task[]> {
     return data || [];
 }
 
+async function fetchDealStats(profileId?: string, isAdmin?: boolean): Promise<{ activeCount: number, totalRevenue: number }> {
+    let query = supabase.from("deals").select("stage, value");
+    if (!isAdmin && profileId) {
+        query = query.eq("owner_id", profileId);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const activeCount = data?.filter(d => d.stage !== "closed" && d.stage !== "lost").length || 0;
+    const totalRevenue = data?.reduce((acc, deal) => acc + (deal.stage === "closed" ? deal.value : 0), 0) || 0;
+
+    return { activeCount, totalRevenue };
+}
+
 // ============================================
 // SWR HOOKS
 // ============================================
@@ -144,10 +160,18 @@ async function fetchTasks(status?: string): Promise<Task[]> {
  * Fetch all deals (legacy, no pagination)
  */
 export function useDeals() {
-    return useSWR<Deal[]>("deals", fetchDeals, {
+    const swr = useSWR<Deal[]>("deals", fetchDeals, {
         revalidateOnFocus: false,
         dedupingInterval: 5000,
     });
+
+    const realtimeKey = useMemo(() => (key: unknown) =>
+        typeof key === "string" && (key === "deals" || key.startsWith("deals-paginated")),
+        []);
+
+    useRealtime("deals", realtimeKey);
+
+    return swr;
 }
 
 /**
@@ -174,24 +198,46 @@ export function useDeal(id: string | null) {
 }
 
 export function usePipelines() {
-    return useSWR<Pipeline[]>("pipelines", fetchPipelines, {
+    const swr = useSWR<Pipeline[]>("pipelines", fetchPipelines, {
         revalidateOnFocus: false,
     });
+
+    useRealtime("pipelines", "pipelines");
+
+    return swr;
 }
 
 export function useActivities(limit = 20) {
-    return useSWR<Activity[]>(
+    const swr = useSWR<Activity[]>(
         `activities-${limit}`,
         () => fetchActivities(limit),
         { revalidateOnFocus: false }
     );
+
+    const realtimeKey = useMemo(() => (key: unknown) => typeof key === "string" && key.startsWith("activities-"), []);
+    useRealtime("activities", realtimeKey);
+
+    return swr;
 }
 
 export function useTasks(status?: string) {
-    return useSWR<Task[]>(
+    const swr = useSWR<Task[]>(
         `tasks-${status || "all"}`,
         () => fetchTasks(status),
         { revalidateOnFocus: false }
+    );
+
+    const realtimeKey = useMemo(() => (key: unknown) => typeof key === "string" && key.startsWith("tasks-"), []);
+    useRealtime("tasks", realtimeKey);
+
+    return swr;
+}
+
+export function useDealStats(profileId?: string, isAdmin?: boolean) {
+    return useSWR<{ activeCount: number, totalRevenue: number }>(
+        profileId ? `deal-stats-${profileId}-${isAdmin}` : null,
+        () => fetchDealStats(profileId, isAdmin),
+        { revalidateOnFocus: false, dedupingInterval: 10000 }
     );
 }
 

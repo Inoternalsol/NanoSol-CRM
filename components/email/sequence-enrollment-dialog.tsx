@@ -1,6 +1,6 @@
 "use client";
 
-import { useEmailSequences, useUpdateEmailSequence } from "@/hooks/use-data";
+import { useEmailSequences, useEnrollInSequence } from "@/hooks/use-data";
 import {
     Dialog,
     DialogContent,
@@ -36,7 +36,7 @@ export function SequenceEnrollmentDialog({
     onSuccess,
 }: SequenceEnrollmentDialogProps) {
     const { data: sequences } = useEmailSequences();
-    const { trigger: updateSequence } = useUpdateEmailSequence();
+    const { trigger: enrollInSequence } = useEnrollInSequence();
     const [selectedSequenceId, setSelectedSequenceId] = useState<string>("");
     const [isEnrolling, setIsEnrolling] = useState(false);
 
@@ -48,19 +48,18 @@ export function SequenceEnrollmentDialog({
             const sequence = sequences?.find(s => s.id === selectedSequenceId);
             if (!sequence) throw new Error("Sequence not found");
 
-            // In a real app, this would create sequence_enrollments records
-            // For now, we update the enrolled_count and show a toast
-            await updateSequence({
-                id: selectedSequenceId,
-                updates: { enrolled_count: (sequence.enrolled_count || 0) + contactIds.length }
+            await enrollInSequence({
+                sequence_id: selectedSequenceId,
+                contact_ids: contactIds
             });
 
             toast.success(`Enrolled ${contactIds.length} contacts into "${sequence.name}"`);
             onSuccess?.();
             onOpenChange(false);
         } catch (error) {
-            console.error(error);
-            toast.error("Failed to enroll contacts");
+            console.error("Enrollment error details:", error);
+            const message = error instanceof Error ? error.message : "Possible database error or constraint violation";
+            toast.error(`Failed to enroll contacts: ${message}`);
         } finally {
             setIsEnrolling(false);
         }
