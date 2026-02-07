@@ -139,16 +139,19 @@ export function DealDialog({
                     value: Number(data.value),
                     probability: Number(data.probability),
                     contact_id: data.contact_id === "none" ? null : data.contact_id,
+                    expected_close_date: data.expected_close_date || null,
                     currency: "USD",
+                    owner_id: activeProfile?.id || null,
                 });
                 toast.success("Deal created successfully");
             }
             reset();
             onOpenChange(false);
             onSuccess?.();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving deal:", error);
-            toast.error("Failed to save deal");
+            const errorMessage = error?.message || error?.code || "Failed to save deal";
+            toast.error(`Error: ${errorMessage}`);
         }
     };
 

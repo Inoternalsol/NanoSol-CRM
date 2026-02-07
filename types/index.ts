@@ -171,15 +171,19 @@ export interface SIPProfile {
     id: string;
     organization_id: string;
     user_id: string;
-    display_name: string;
+    name: string;  // Account display name (e.g., "Work SIP", "Personal")
+    display_name: string;  // Caller ID display name
     sip_username: string;
     sip_domain: string;
     outbound_proxy?: string;
     ws_server?: string; // WebSocket server URL (e.g., wss://sip.provider.com:8089/ws)
+    websocket_server?: string; // Alias for ws_server
     sip_password?: string; // For form input, maps to sip_password_encrypted
     sip_password_encrypted?: string; // Stored encrypted in DB
+    is_default: boolean;  // Primary account for this user
     is_active: boolean;
     created_at: string;
+    updated_at?: string;
 }
 
 export interface SMTPConfig {

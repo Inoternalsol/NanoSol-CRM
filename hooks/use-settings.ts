@@ -66,8 +66,8 @@ export function useApiKeys(orgId: string | null) {
 }
 
 export function useIntegrations(userId: string | null) {
-    return useSWR<UserIntegration[]>(userId ? `integrations-${userId}` : null, async () => {
-        if (!userId) return null;
+    return useSWR<UserIntegration[] | null>(userId ? `integrations-${userId}` : null, async () => {
+        if (!userId) return [];
         const { data, error } = await supabase.from("user_integrations").select("*").eq("user_id", userId);
         if (error) throw error;
         return data || [];
@@ -164,3 +164,85 @@ export function useSyncCalendar() {
         return data;
     });
 }
+
+// ============================================
+// SIP MULTI-ACCOUNT HOOKS
+// ============================================
+
+export function useSipAccounts(userId: string | null) {
+    return useSWR<SIPProfile[]>(userId ? `sip-accounts-${userId}` : null, async () => {
+        if (!userId) return [];
+        const { data, error } = await supabase
+            .from("sip_profiles")
+            .select("*")
+            .eq("user_id", userId)
+            .order("is_default", { ascending: false })
+            .order("created_at", { ascending: true });
+        if (error) throw error;
+        return data || [];
+    });
+}
+
+export function useSaveSipAccount() {
+    return useSWRMutation("sip-accounts", async (_, { arg }: {
+        arg: {
+            id?: string;
+            userId: string;
+            orgId: string;
+            data: Partial<SIPProfile>;
+        }
+    }) => {
+        const accountData = {
+            ...arg.data,
+            user_id: arg.userId,
+            organization_id: arg.orgId,
+        };
+
+        if (arg.id) {
+            // Update existing
+            const { data, error } = await supabase
+                .from("sip_profiles")
+                .update(accountData)
+                .eq("id", arg.id)
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        } else {
+            // Create new
+            const { data, error } = await supabase
+                .from("sip_profiles")
+                .insert([accountData])
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        }
+    });
+}
+
+export function useDeleteSipAccount() {
+    return useSWRMutation("sip-accounts", async (_, { arg }: { arg: string }) => {
+        const { error } = await supabase
+            .from("sip_profiles")
+            .delete()
+            .eq("id", arg);
+        if (error) throw error;
+    });
+}
+
+export function useSetDefaultSipAccount() {
+    return useSWRMutation("sip-accounts", async (_, { arg }: { arg: { id: string; userId: string } }) => {
+        // The database trigger will handle unsetting other defaults
+        const { data, error } = await supabase
+            .from("sip_profiles")
+            .update({ is_default: true })
+            .eq("id", arg.id)
+            .eq("user_id", arg.userId)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    });
+}
+

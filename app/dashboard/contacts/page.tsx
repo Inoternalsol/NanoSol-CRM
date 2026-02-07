@@ -37,6 +37,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ContactListSkeleton } from "@/components/ui/skeleton-loaders";
+import { ContactsEmptyState } from "@/components/ui/empty-state";
 import { toast } from "sonner";
 import { SequenceEnrollmentDialog } from "@/components/email/sequence-enrollment-dialog";
 import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
@@ -529,17 +531,11 @@ export default function ContactsPage() {
             <Card>
                 <CardContent className="p-0">
                     {isLoading ? (
-                        <div className="p-8 flex items-center justify-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <div className="p-4">
+                            <ContactListSkeleton count={6} />
                         </div>
                     ) : contacts.length === 0 ? (
-                        <div className="p-8 text-center">
-                            <p className="text-muted-foreground">No contacts found.</p>
-                            <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Contact
-                            </Button>
-                        </div>
+                        <ContactsEmptyState onAction={() => setDialogOpen(true)} />
                     ) : (
                         <div className="space-y-4">
                             <Table>

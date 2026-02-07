@@ -11,19 +11,26 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useWorkflows, useDeleteWorkflow, useUpdateWorkflow, useCreateWorkflow } from "@/hooks/use-workflows";
+import { useActiveProfile } from "@/hooks/use-data";
 import { format } from "date-fns";
 import Link from "next/link";
 import { toast } from "sonner";
 
 export default function AutomationPage() {
+    const { data: profile } = useActiveProfile();
     const { data: workflows, isLoading } = useWorkflows();
     const { trigger: deleteWorkflow } = useDeleteWorkflow();
     const { trigger: updateWorkflow } = useUpdateWorkflow();
     const { trigger: createWorkflow } = useCreateWorkflow();
 
     const handleCreate = async () => {
+        if (!profile?.organization_id) {
+            toast.error("Unable to create workflow: Organization not found");
+            return;
+        }
         try {
             await createWorkflow({
+                organization_id: profile.organization_id,
                 name: "New Automation",
                 description: "Describe your automation here...",
                 nodes: [],
@@ -31,8 +38,9 @@ export default function AutomationPage() {
                 is_active: false
             });
             toast.success("Workflow created successfully");
-        } catch {
-            toast.error("Failed to create workflow");
+        } catch (error: any) {
+            console.error("Error creating workflow:", error);
+            toast.error(error?.message || "Failed to create workflow");
         }
     };
 

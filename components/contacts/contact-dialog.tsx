@@ -250,7 +250,7 @@ export function ContactDialog({
                                             {s.label}
                                         </SelectItem>
                                     ))}
-                                    {!statuses && (
+                                    {(!statuses || statuses.length === 0) && (
                                         <>
                                             <SelectItem value="new">New</SelectItem>
                                             <SelectItem value="contacted">Contacted</SelectItem>

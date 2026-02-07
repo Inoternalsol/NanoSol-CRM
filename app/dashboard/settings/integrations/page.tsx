@@ -90,9 +90,10 @@ export default function WebFormsPage() {
             setOpen(false);
             setNewFormName("");
             toast.success("Web form created");
-        } catch (error) {
-            console.error("Error creating form:", error);
-            toast.error("Failed to create web form");
+        } catch (error: any) {
+            const errorMessage = error?.message || error?.code || (error && typeof error === 'object' ? JSON.stringify(error) : 'Unknown error');
+            console.error("Error creating form:", errorMessage, error);
+            toast.error(`Failed to create web form: ${errorMessage}`);
         }
     };
 

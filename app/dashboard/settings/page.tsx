@@ -6,8 +6,6 @@ import {
     User,
     Building2,
     Palette,
-    Mail,
-    Phone,
     Shield,
     Bell,
     Database,
@@ -24,14 +22,15 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useSipProfile, useUpdateSipProfile, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar } from "@/hooks/use-data";
+import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar } from "@/hooks/use-data";
 import { EmailAccountManager } from "@/components/settings/email-account-manager";
+import { SipAccountManager } from "@/components/settings/sip-account-manager";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { useEffect, useRef, useState, Suspense } from "react";
-import type { Profile, Organization, SIPProfile, SMTPConfig, APIKeys, AIProvider } from "@/types";
+import type { Profile, Organization, APIKeys, AIProvider } from "@/types";
 
 export default function SettingsPage() {
     return (
@@ -48,13 +47,11 @@ export default function SettingsPage() {
 function SettingsContent() {
     const { data: profile, isLoading: profileLoading } = useActiveProfile();
     const { data: org } = useOrganization(profile?.organization_id || null);
-    const { data: sip } = useSipProfile(profile?.id || null);
     const { data: apiKeys } = useApiKeys(profile?.organization_id || null);
     const { trigger: updateProfile, isMutating: isUpdatingProfile } = useUpdateProfile();
     const { trigger: updateOrg, isMutating: isUpdatingOrg } = useUpdateOrganization();
-    const { trigger: updateSip, isMutating: isUpdatingSip } = useUpdateSipProfile();
     const { trigger: updateApiKeys, isMutating: isUpdatingApiKeys } = useUpdateApiKeys();
-    const { data: integrations, mutate: mutateIntegrations } = useIntegrations(profile?.id || null);
+    const { data: integrations } = useIntegrations(profile?.id || null);
     const { trigger: syncCalendar, isMutating: isSyncing } = useSyncCalendar();
 
     const router = useRouter();
@@ -89,17 +86,7 @@ function SettingsContent() {
         }
     });
 
-    // SIP Form
-    const sipForm = useForm({
-        defaultValues: {
-            display_name: sip?.display_name || "",
-            sip_username: sip?.sip_username || "",
-            sip_password: "", // Handled separately/hidden
-            sip_domain: sip?.sip_domain || "",
-            outbound_proxy: sip?.outbound_proxy || "",
-            ws_server: sip?.ws_server || "",
-        }
-    });
+
 
 
     // API Keys Form
@@ -129,8 +116,6 @@ function SettingsContent() {
     // Refs to track if forms have been initialized with data
     const profileInitialized = useRef(false);
     const orgInitialized = useRef(false);
-    const sipInitialized = useRef(false);
-    const smtpInitialized = useRef(false);
     const apiKeysInitialized = useRef(false);
 
     // Init forms when data first loads
@@ -148,18 +133,6 @@ function SettingsContent() {
         }
     }, [org, orgForm]);
 
-    useEffect(() => {
-        if (sip && !sipInitialized.current) {
-            sipForm.reset({
-                display_name: sip.display_name,
-                sip_username: sip.sip_username,
-                sip_domain: sip.sip_domain,
-                outbound_proxy: sip.outbound_proxy || "",
-                ws_server: sip.ws_server || ""
-            });
-            sipInitialized.current = true;
-        }
-    }, [sip, sipForm]);
 
 
     useEffect(() => {
@@ -212,14 +185,6 @@ function SettingsContent() {
         }
     };
 
-    const onSipSubmit = async (data: Partial<SIPProfile>) => {
-        try {
-            await updateSip({ userId: profile.id, orgId: profile.organization_id, updates: data });
-            toast.success("SIP settings updated successfully");
-        } catch {
-            toast.error("Failed to update SIP settings");
-        }
-    };
 
 
     const onApiKeysSubmit = async (data: { openai_key: string; gemini_key: string; qwen_key: string; kimi_key: string; active_provider: AIProvider }) => {
@@ -538,51 +503,10 @@ function SettingsContent() {
                             </CardContent>
                         </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Phone className="h-5 w-5" />
-                                    SIP Configuration
-                                </CardTitle>
-                                <CardDescription>
-                                    Configure your SIP credentials for making calls
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <form onSubmit={sipForm.handleSubmit(onSipSubmit)} className="space-y-4">
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="display_name">Display Name</Label>
-                                            <Input id="display_name" {...sipForm.register("display_name")} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sip_username">SIP Username</Label>
-                                            <Input id="sip_username" {...sipForm.register("sip_username")} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sip_password">SIP Password</Label>
-                                            <Input id="sip_password" type="password" {...sipForm.register("sip_password")} placeholder="••••••••" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sip_domain">SIP Domain</Label>
-                                            <Input id="sip_domain" {...sipForm.register("sip_domain")} placeholder="sip.provider.com" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="ws_server">WebSocket Server URL</Label>
-                                            <Input id="ws_server" {...sipForm.register("ws_server")} placeholder="wss://sip.provider.com:8089/ws" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="outbound_proxy">Outbound Proxy (optional)</Label>
-                                            <Input id="outbound_proxy" {...sipForm.register("outbound_proxy")} />
-                                        </div>
-                                    </div>
-                                    <Button type="submit" disabled={isUpdatingSip}>
-                                        {isUpdatingSip && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Save SIP Settings
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
+                        {/* SIP Multi-Account Manager */}
+                        {profile && (
+                            <SipAccountManager userId={profile.id} orgId={profile.organization_id} />
+                        )}
 
                         {isAdmin && (
                             <>
