@@ -48,7 +48,7 @@ const navigation: NavItem[] = [
     { name: "Analytics", href: "/dashboard/reports", icon: BarChart3 },
     { name: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
     { name: "Team", href: "/dashboard/team", icon: Users, roles: ["admin", "manager"] },
-    { name: "Automations", href: "/dashboard/automation", icon: Zap, roles: ["admin", "manager"] },
+    { name: "Automations", href: "/dashboard/automations", icon: Zap, roles: ["admin", "manager"] },
 ];
 
 const bottomNavigation: NavItem[] = [

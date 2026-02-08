@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Search, Bell, Moon, Sun, User, LogOut, Command, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { useNotifications } from "@/hooks/use-notifications";
-// ... imports
 
 export function Topbar() {
     const router = useRouter();
@@ -159,9 +157,6 @@ export function Topbar() {
                     </Link>
                 </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* ... User Menu ... */}
-
 
             {/* User Menu */}
             <DropdownMenu>

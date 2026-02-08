@@ -18,11 +18,12 @@ declare global {
 }
 
 export class SipService {
-    private ua: JsSIP.UA | null = null;
+    private uas: Map<string, JsSIP.UA> = new Map();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private session: any | null = null;
-    private _isConnected: boolean = false;
-    private _isRegistered: boolean = false;
+    private sessions: Map<string, any> = new Map();
+    private _activeUAId: string | null = null;
+    private _isConnected: Map<string, boolean> = new Map();
+    private _isRegistered: Map<string, boolean> = new Map();
     private _isHangingUp: boolean = false;
     private _remoteStream: MediaStream | null = null;
 
@@ -38,20 +39,38 @@ export class SipService {
         return new SipService();
     }
 
-    public get isConnected() { return this._isConnected; }
-    public get isRegistered() { return this._isRegistered; }
-    public get hasUA() { return !!this.ua; }
+    public get activeUAId() { return this._activeUAId; }
+    public set activeUAId(id: string | null) { this._activeUAId = id; }
+
+    public isConnected(id?: string) {
+        const targetId = id || this._activeUAId;
+        return targetId ? (this._isConnected.get(targetId) || false) : false;
+    }
+
+    public isRegistered(id?: string) {
+        const targetId = id || this._activeUAId;
+        return targetId ? (this._isRegistered.get(targetId) || false) : false;
+    }
+
+    public hasUA(id?: string) {
+        const targetId = id || this._activeUAId;
+        return targetId ? this.uas.has(targetId) : this.uas.size > 0;
+    }
+
     public get remoteStream() { return this._remoteStream; }
 
-    public async connect(config: SipConfig) {
+    public async connect(config: SipConfig, id: string = "default") {
         if (typeof window === "undefined") return;
-        if (this.ua && this._isConnected) return;
+
+        // If already connected for this ID, don't re-connect
+        if (this.uas.has(id) && this._isConnected.get(id)) return;
 
         try {
+            console.log(`[SIP] Connecting account ${id}: ${config.uri}`);
             const wsServer = Array.isArray(config.ws_servers) ? config.ws_servers[0] : config.ws_servers;
             const socket = new JsSIP.WebSocketInterface(wsServer);
 
-            this.ua = new JsSIP.UA({
+            const ua = new JsSIP.UA({
                 uri: config.uri,
                 password: config.password,
                 display_name: config.display_name,
@@ -59,26 +78,50 @@ export class SipService {
                 register: true,
             });
 
-            this.setupEventHandlers();
-            this.ua.start();
+            this.uas.set(id, ua);
+            this.setupEventHandlers(id);
+            ua.start();
+
+            // Set as active if it's the first one or if none active
+            if (!this._activeUAId) {
+                this._activeUAId = id;
+            }
         } catch (error) {
-            console.error("Failed to initialize SIP UA:", error);
-            this.enableDemoMode();
+            console.error(`Failed to initialize SIP UA for ${id}:`, error);
+            if (id === "default") this.enableDemoMode("default");
         }
     }
 
-    public disconnect() {
-        if (this.ua) {
-            this.ua.stop();
-            this.ua = null;
+    public disconnect(id?: string) {
+        if (id) {
+            const ua = this.uas.get(id);
+            if (ua) {
+                ua.stop();
+                this.uas.delete(id);
+            }
+            this._isConnected.delete(id);
+            this._isRegistered.delete(id);
+            this.sessions.delete(id);
+            if (this._activeUAId === id) this._activeUAId = null;
+        } else {
+            // Disconnect all
+            this.uas.forEach((ua) => ua.stop());
+            this.uas.clear();
+            this._isConnected.clear();
+            this._isRegistered.clear();
+            this.sessions.clear();
+            this._activeUAId = null;
         }
-        this._isConnected = false;
-        this._isRegistered = false;
         this._remoteStream = null;
     }
 
-    public call(target: string) {
-        if (!this.ua || !this._isRegistered) {
+    public call(target: string, accountId?: string) {
+        const id = accountId || this._activeUAId;
+        const ua = id ? this.uas.get(id) : null;
+        const registered = id ? this._isRegistered.get(id) : false;
+
+        if (!ua || !registered) {
+            console.warn(`[SIP] Cannot place call: Account ${id} not ready. Falling back to simulation.`);
             this.simulateCall();
             return;
         }
@@ -103,11 +146,14 @@ export class SipService {
                 window.dispatchEvent(new CustomEvent("sip:call:failed", { detail: e }));
                 useDialerStore.getState().endCall();
             },
-            ended: () => useDialerStore.getState().endCall(),
+            ended: () => {
+                this.sessions.delete(id!);
+                useDialerStore.getState().endCall();
+            },
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             confirmed: (e: any) => {
                 useDialerStore.getState().setCallStatus("active");
-                this.session = e.session;
+                this.sessions.set(id!, e.session);
             },
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             peerconnection: (e: any) => {
@@ -129,20 +175,26 @@ export class SipService {
         };
 
         try {
-            this.session = this.ua.call(target, options);
+            console.log(`[SIP] Placing call from account ${id} to ${target}`);
+            const session = ua.call(target, options);
+            this.sessions.set(id!, session);
         } catch (e) {
             console.error("Call error:", e);
             this.simulateCall();
         }
     }
 
-    public answer() {
-        if (this.session) {
-            this.session.answer({ mediaConstraints: { audio: true, video: false } });
+    public answer(accountId?: string) {
+        const id = accountId || this._activeUAId;
+        const session = id ? this.sessions.get(id) : null;
+        if (session) {
+            session.answer({ mediaConstraints: { audio: true, video: false } });
         }
     }
 
-    public hangup() {
+    public hangup(accountId?: string) {
+        const id = accountId || this._activeUAId;
+
         if (typeof document !== "undefined") {
             const remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement;
             if (remoteAudio) {
@@ -152,12 +204,12 @@ export class SipService {
         }
         this._remoteStream = null;
 
-        if (this.session) {
+        const session = id ? this.sessions.get(id) : null;
+        if (session) {
             try {
                 this._isHangingUp = true;
-                const s = this.session;
-                this.session = null;
-                s.terminate();
+                this.sessions.delete(id!);
+                session.terminate();
             } catch {
                 this._isHangingUp = false;
             }
@@ -165,37 +217,69 @@ export class SipService {
         useDialerStore.getState().endCall();
     }
 
-    public sendDTMF(tone: string) {
-        if (this.session) this.session.sendDTMF(tone);
+    public sendDTMF(tone: string, accountId?: string) {
+        const id = accountId || this._activeUAId;
+        const session = id ? this.sessions.get(id) : null;
+        if (session) session.sendDTMF(tone);
     }
 
-    public mute(isMuted: boolean) {
-        if (this.session) {
-            if (isMuted) this.session.mute();
-            else this.session.unmute();
+    public mute(isMuted: boolean, accountId?: string) {
+        const id = accountId || this._activeUAId;
+        const session = id ? this.sessions.get(id) : null;
+        if (session) {
+            if (isMuted) session.mute();
+            else session.unmute();
         }
     }
 
-    private setupEventHandlers() {
-        if (!this.ua) return;
-        this.ua.on('connected', () => { this._isConnected = true; });
-        this.ua.on('disconnected', () => { this._isConnected = false; });
-        this.ua.on('registered', () => { this._isRegistered = true; });
-        this.ua.on('unregistered', () => { this._isRegistered = false; });
-        this.ua.on('registrationFailed', () => { this._isRegistered = false; });
+    private setupEventHandlers(id: string) {
+        const ua = this.uas.get(id);
+        if (!ua) return;
+
+        ua.on('connected', () => {
+            console.log(`[SIP] Account ${id} connected`);
+            this._isConnected.set(id, true);
+        });
+        ua.on('disconnected', () => {
+            console.log(`[SIP] Account ${id} disconnected`);
+            this._isConnected.set(id, false);
+        });
+        ua.on('registered', () => {
+            console.log(`[SIP] Account ${id} registered`);
+            this._isRegistered.set(id, true);
+        });
+        ua.on('unregistered', () => {
+            this._isRegistered.set(id, false);
+        });
+        ua.on('registrationFailed', (e) => {
+            console.error(`[SIP] Account ${id} registration failed:`, e);
+            this._isRegistered.set(id, false);
+        });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.ua.on('newRTCSession', (data: { session: any }) => {
+        ua.on('newRTCSession', (data: { session: any }) => {
             const session = data.session;
             if (session.direction === 'incoming') {
-                this.session = session;
+                console.log(`[SIP] Incoming call on account ${id}`);
+                this.sessions.set(id, session);
+                this._activeUAId = id; // Switch to the account receiving the call
+
                 const store = useDialerStore.getState();
                 store.setCurrentNumber(session.remote_identity.uri.user);
                 store.openDialer();
                 store.setCallStatus("ringing");
-                session.on('ended', () => { store.endCall(); this.session = null; });
-                session.on('failed', () => { store.endCall(); this.session = null; });
-                session.on('accepted', () => { store.setCallStatus("active"); });
+
+                session.on('ended', () => {
+                    store.endCall();
+                    this.sessions.delete(id);
+                });
+                session.on('failed', () => {
+                    store.endCall();
+                    this.sessions.delete(id);
+                });
+                session.on('accepted', () => {
+                    store.setCallStatus("active");
+                });
             }
         });
     }
@@ -221,8 +305,8 @@ export class SipService {
         store.setCallStatus("ringing");
     }
 
-    private enableDemoMode() {
-        this._isConnected = true;
-        this._isRegistered = true;
+    private enableDemoMode(id: string) {
+        this._isConnected.set(id, true);
+        this._isRegistered.set(id, true);
     }
 }

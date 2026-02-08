@@ -20,7 +20,7 @@ import {
     CommandList,
     CommandSeparator,
 } from "@/components/ui/command";
-import { useCommandPaletteStore } from "@/lib/stores";
+import { useCommandPaletteStore, useDialerStore } from "@/lib/stores";
 
 const quickActions = [
     { name: "New Contact", icon: Plus, action: "/dashboard/contacts/new" },
@@ -38,6 +38,7 @@ const navigationItems = [
 export function CommandPalette() {
     const router = useRouter();
     const { isOpen, close, toggle } = useCommandPaletteStore();
+    const { openDialer } = useDialerStore();
 
     // Keyboard shortcut
     useEffect(() => {
@@ -58,11 +59,10 @@ export function CommandPalette() {
             if (command.startsWith("/")) {
                 router.push(command);
             } else if (command === "open-dialer") {
-                // TODO: Open dialer via store
-                console.log("Opening dialer...");
+                openDialer();
             }
         },
-        [router, close]
+        [router, close, openDialer]
     );
 
     return (

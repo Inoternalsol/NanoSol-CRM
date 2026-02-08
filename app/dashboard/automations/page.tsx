@@ -1,22 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import {
-    Zap,
-    Plus,
-    Play,
-    Pause,
-    MoreHorizontal,
-    ArrowRight,
-    Mail,
-    User,
-    Calendar,
-    Loader2,
-    Trash2,
-} from "lucide-react";
+import { Plus, Workflow as WorkflowIcon, MoreVertical, Play, Pause, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
     DropdownMenu,
@@ -24,302 +10,142 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-    useAutomationRules,
-    useDeleteAutomationRule,
-    useToggleAutomationRule,
-} from "@/hooks/use-data";
-import { AutomationDialog } from "@/components/automations/automation-dialog";
-import type { AutomationRule } from "@/types";
+import { useWorkflows, useDeleteWorkflow, useUpdateWorkflow, useCreateWorkflow } from "@/hooks/use-workflows";
+import { useActiveProfile } from "@/hooks/use-data";
+import { format } from "date-fns";
+import Link from "next/link";
 import { toast } from "sonner";
 
-// Organization ID from authenticated profile
+export default function AutomationPage() {
+    const { data: profile } = useActiveProfile();
+    const { data: workflows, isLoading } = useWorkflows();
+    const { trigger: deleteWorkflow } = useDeleteWorkflow();
+    const { trigger: updateWorkflow } = useUpdateWorkflow();
+    const { trigger: createWorkflow } = useCreateWorkflow();
 
-const triggerTypes = [
-    {
-        icon: User,
-        name: "Lead Created",
-        description: "When a new lead is added to the CRM",
-    },
-    {
-        icon: ArrowRight,
-        name: "Deal Stage Changed",
-        description: "When a deal moves to a different stage",
-    },
-    {
-        icon: Mail,
-        name: "Email Opened",
-        description: "When a contact opens your email",
-    },
-    {
-        icon: Calendar,
-        name: "Meeting Scheduled",
-        description: "When a meeting is booked on your calendar",
-    },
-];
-
-// Format trigger type for display
-function formatTriggerType(type: string): string {
-    return type.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-}
-
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useActiveProfile } from "@/hooks/use-data";
-
-export default function AutomationsPage() {
-    const { data: activeProfile, isLoading: profileLoading } = useActiveProfile();
-    const router = useRouter();
-
-    useEffect(() => {
-        if (!profileLoading && activeProfile && activeProfile.role !== "admin") {
-            router.push("/dashboard");
+    const handleCreate = async () => {
+        if (!profile?.organization_id) {
+            toast.error("Unable to create workflow: Organization not found");
+            return;
         }
-    }, [activeProfile, profileLoading, router]);
-
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [selectedAutomation, setSelectedAutomation] = useState<AutomationRule | null>(null);
-
-    const { data: automations = [], isLoading, mutate } = useAutomationRules();
-    const { trigger: deleteRule } = useDeleteAutomationRule();
-    const { trigger: toggleRule } = useToggleAutomationRule();
-
-    const handleNewAutomation = () => {
-        setSelectedAutomation(null);
-        setDialogOpen(true);
-    };
-
-    const handleEditAutomation = (automation: AutomationRule) => {
-        setSelectedAutomation(automation);
-        setDialogOpen(true);
-    };
-
-    const handleDeleteAutomation = async (id: string) => {
         try {
-            await deleteRule(id);
-            mutate();
-            toast.success("Automation deleted");
+            await createWorkflow({
+                organization_id: profile.organization_id,
+                name: "New Automation",
+                description: "Describe your automation here...",
+                nodes: [],
+                edges: [],
+                is_active: false
+            });
+            toast.success("Workflow created successfully");
         } catch (error) {
-            console.error("Delete failed:", error);
-            toast.error("Failed to delete automation");
+            console.error("Error creating workflow:", error);
+            const message = error instanceof Error ? error.message : "Failed to create workflow";
+            toast.error(message);
         }
     };
 
-    const handleToggleAutomation = async (id: string, currentStatus: boolean) => {
+    const handleDelete = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this workflow?")) return;
         try {
-            await toggleRule({ id, is_active: !currentStatus });
-            mutate();
-            toast.success(`Automation ${!currentStatus ? "activated" : "paused"}`);
-        } catch (error) {
-            console.error("Toggle failed:", error);
-            toast.error("Failed to update automation");
+            await deleteWorkflow(id);
+            toast.success("Workflow deleted");
+        } catch {
+            toast.error("Failed to delete workflow");
         }
     };
 
-    const handleDialogClose = (open: boolean) => {
-        setDialogOpen(open);
-        if (!open) {
-            mutate();
+    const toggleStatus = async (id: string, currentStatus: boolean) => {
+        try {
+            await updateWorkflow({ id, updates: { is_active: !currentStatus } });
+            toast.success(`Workflow ${!currentStatus ? "activated" : "deactivated"}`);
+        } catch {
+            toast.error("Failed to update status");
         }
     };
 
-    const activeCount = automations.filter((a) => a.is_active).length;
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-6"
-        >
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Automations</h1>
-                    <p className="text-muted-foreground">
-                        Build workflows to automate repetitive tasks
-                    </p>
+                    <h1 className="text-3xl font-bold tracking-tight">Workflows & Automation</h1>
+                    <p className="text-muted-foreground">Design and manage visual automation sequences.</p>
                 </div>
-                <Button onClick={handleNewAutomation}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Automation
+                <Button onClick={handleCreate} className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    New Workflow
                 </Button>
             </div>
 
-            {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Active Automations
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">
-                            {activeCount}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Total Automations
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-primary">
-                            {automations.length}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Paused
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">
-                            {automations.length - activeCount}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Time Saved
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-500">~48h</div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Automations List */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Your Automations</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {isLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : automations.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p>No automations yet</p>
-                            <p className="text-sm">Create your first automation</p>
-                        </div>
-                    ) : (
-                        automations.map((automation) => (
-                            <div
-                                key={automation.id}
-                                className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div
-                                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${automation.is_active
-                                            ? "bg-primary/10"
-                                            : "bg-muted"
-                                            }`}
-                                    >
-                                        <Zap
-                                            className={`h-5 w-5 ${automation.is_active
-                                                ? "text-primary"
-                                                : "text-muted-foreground"
-                                                }`}
-                                        />
+            {isLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3].map((i) => (
+                        <Card key={i} className="animate-pulse">
+                            <CardHeader className="h-32 bg-muted/50" />
+                        </Card>
+                    ))}
+                </div>
+            ) : workflows?.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl">
+                    <WorkflowIcon className="w-12 h-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium">No workflows found</h3>
+                    <p className="text-muted-foreground mb-4 text-center max-w-sm">
+                        Start by creating your first visual automation to streamline your sales process.
+                    </p>
+                    <Button onClick={handleCreate}>Create Your First Workflow</Button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {workflows?.map((workflow) => (
+                        <Card key={workflow.id} className="hover:shadow-lg transition-shadow">
+                            <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <CardTitle className="text-xl">{workflow.name}</CardTitle>
+                                        <Badge variant={workflow.is_active ? "default" : "secondary"}>
+                                            {workflow.is_active ? "Active" : "Draft"}
+                                        </Badge>
                                     </div>
-                                    <div>
-                                        <p className="font-medium">{automation.name}</p>
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <span>Trigger: {formatTriggerType(automation.trigger_type)}</span>
-                                            <span>•</span>
-                                            <span>{automation.actions.length} action{automation.actions.length !== 1 ? "s" : ""}</span>
-                                        </div>
-                                    </div>
+                                    <CardDescription>{workflow.description}</CardDescription>
                                 </div>
-
-                                <div className="flex items-center gap-4">
-                                    <Badge
-                                        variant={automation.is_active ? "default" : "secondary"}
-                                    >
-                                        {automation.is_active ? "active" : "paused"}
-                                    </Badge>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className={
-                                            automation.is_active
-                                                ? "text-orange-500"
-                                                : "text-green-500"
-                                        }
-                                        onClick={() => handleToggleAutomation(automation.id, automation.is_active)}
-                                    >
-                                        {automation.is_active ? (
-                                            <Pause className="h-4 w-4" />
-                                        ) : (
-                                            <Play className="h-4 w-4" />
-                                        )}
-                                    </Button>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleEditAutomation(automation)}>
-                                                Edit
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                className="text-destructive"
-                                                onClick={() => handleDeleteAutomation(automation.id)}
-                                            >
-                                                <Trash2 className="h-4 w-4 mr-2" />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <MoreVertical className="w-4 h-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem asChild>
+                                            <Link href={`/dashboard/automations/builder/${workflow.id}`}>
+                                                Edit Workflow
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => toggleStatus(workflow.id, workflow.is_active)}>
+                                            {workflow.is_active ? (
+                                                <span className="flex items-center text-yellow-600">
+                                                    <Pause className="w-4 h-4 mr-2" /> Deactivate
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center text-green-600">
+                                                    <Play className="w-4 h-4 mr-2" /> Activate
+                                                </span>
+                                            )}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDelete(workflow.id)} className="text-destructive">
+                                            <Trash2 className="w-4 h-4 mr-2" /> Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-xs text-muted-foreground">
+                                    Last updated {format(new Date(workflow.updated_at), "MMM d, yyyy")}
                                 </div>
-                            </div>
-                        ))
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Available Triggers */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Available Triggers</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {triggerTypes.map((trigger) => (
-                            <div
-                                key={trigger.name}
-                                className="p-4 rounded-lg border hover:border-primary hover:bg-primary/5 transition-colors cursor-pointer"
-                                onClick={handleNewAutomation}
-                            >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted mb-3">
-                                    <trigger.icon className="h-5 w-5 text-muted-foreground" />
-                                </div>
-                                <p className="font-medium text-sm">{trigger.name}</p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {trigger.description}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
-
-            <AutomationDialog
-                open={dialogOpen}
-                onOpenChange={handleDialogClose}
-                automation={selectedAutomation}
-                organizationId={activeProfile?.organization_id || ""}
-            />
-        </motion.div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }

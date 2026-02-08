@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
 import {
   ArrowRight,
   Sparkles,
@@ -16,6 +15,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LandingNav } from "@/components/landing/nav";
+import { ClientMotion } from "@/components/landing/client-motion";
 
 const features = [
   {
@@ -74,52 +75,12 @@ const testimonials = [
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background" suppressHydrationWarning>
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Sparkles className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold">NanoSol CRM</span>
-            </div>
-            <div className="hidden md:flex items-center gap-8">
-              <Link
-                href="#features"
-                className="text-sm text-muted-foreground hover:text-foreground transition"
-              >
-                Features
-              </Link>
-              <Link
-                href="#pricing"
-                className="text-sm text-muted-foreground hover:text-foreground transition"
-              >
-                Pricing
-              </Link>
-              <Link
-                href="#testimonials"
-                className="text-sm text-muted-foreground hover:text-foreground transition"
-              >
-                Testimonials
-              </Link>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" asChild>
-                <Link href="/login">Sign in</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/signup">Get Started</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <LandingNav />
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <motion.div
+          <ClientMotion
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
@@ -165,10 +126,10 @@ export default function LandingPage() {
                 SOC 2 Compliant
               </div>
             </div>
-          </motion.div>
+          </ClientMotion>
 
-          {/* Hero Image Placeholder */}
-          <motion.div
+          {/* Hero Image */}
+          <ClientMotion
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2 }}
@@ -186,14 +147,14 @@ export default function LandingPage() {
                 />
               </div>
             </div>
-          </motion.div>
+          </ClientMotion>
         </div>
       </section>
 
       {/* Features Section */}
       <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-muted/30">
         <div className="max-w-7xl mx-auto">
-          <motion.div
+          <ClientMotion
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
@@ -207,11 +168,11 @@ export default function LandingPage() {
               A complete suite of tools to manage your entire sales process from
               first touch to closed deal.
             </p>
-          </motion.div>
+          </ClientMotion>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
-              <motion.div
+              <ClientMotion
                 key={feature.title}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -231,7 +192,7 @@ export default function LandingPage() {
                     </p>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </ClientMotion>
             ))}
           </div>
         </div>
@@ -240,7 +201,7 @@ export default function LandingPage() {
       {/* Testimonials Section */}
       <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <motion.div
+          <ClientMotion
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
@@ -250,11 +211,11 @@ export default function LandingPage() {
               Loved by sales teams
               <span className="text-primary"> worldwide</span>
             </h2>
-          </motion.div>
+          </ClientMotion>
 
           <div className="grid md:grid-cols-2 gap-8">
             {testimonials.map((testimonial, index) => (
-              <motion.div
+              <ClientMotion
                 key={testimonial.author}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -272,7 +233,7 @@ export default function LandingPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </ClientMotion>
             ))}
           </div>
         </div>
@@ -281,7 +242,7 @@ export default function LandingPage() {
       {/* CTA Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-primary/5">
         <div className="max-w-4xl mx-auto text-center">
-          <motion.div
+          <ClientMotion
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -299,7 +260,7 @@ export default function LandingPage() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-          </motion.div>
+          </ClientMotion>
         </div>
       </section>
 

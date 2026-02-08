@@ -1,8 +1,17 @@
 "use client";
 
 import { useWorkflows } from "@/hooks/use-workflows";
-import WorkflowBuilder from "@/components/automation/workflow-builder";
+import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
+
+const WorkflowBuilder = dynamic(() => import("@/components/automation/workflow-builder"), {
+    ssr: false,
+    loading: () => (
+        <div className="flex items-center justify-center h-screen">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+    ),
+});
 
 import { use } from "react";
 

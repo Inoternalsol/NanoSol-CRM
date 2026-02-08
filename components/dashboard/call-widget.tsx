@@ -22,6 +22,14 @@ import { useDialerStore } from "@/lib/stores";
 import { SipService } from "@/lib/services/sip-service";
 import { useContactsPaginated, useContactByPhone } from "@/hooks/use-data";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useSipAccounts, useActiveProfile } from "@/hooks/use-settings";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 // Sub-components
 import { DialerPad } from "./dialer/dialer-pad";
@@ -64,7 +72,12 @@ export function CallWidget() {
         updateQueueStatus,
         stopAutoDialer,
         autoDialerQueue,
+        selectedSipAccountId,
+        setSelectedSipAccountId,
     } = useDialerStore();
+
+    const { data: profile } = useActiveProfile();
+    const { data: sipAccounts } = useSipAccounts(profile?.id || null);
 
     const { data: contact } = useContactByPhone(currentNumber || null);
 
@@ -146,16 +159,16 @@ export function CallWidget() {
         if (target) {
             startCall();
             if (target !== currentNumber) setCurrentNumber(target);
-            SipService.getInstance().call(target);
+            SipService.getInstance().call(target, selectedSipAccountId || undefined);
         }
-    }, [currentNumber, startCall, setCurrentNumber]);
+    }, [currentNumber, startCall, setCurrentNumber, selectedSipAccountId]);
 
     const handleHangup = () => {
         // If in auto-dial mode, mark current as answered before hangup
         if (autoDialerActive && currentNumber) {
             updateQueueStatus(currentNumber, "answered");
         }
-        SipService.getInstance().hangup();
+        SipService.getInstance().hangup(selectedSipAccountId || undefined);
     };
 
     const handleQuickDial = (phone: string) => {
@@ -278,6 +291,43 @@ export function CallWidget() {
                                             <HistoryIcon className="h-4 w-4 mr-2" /> History
                                         </TabsTrigger>
                                     </TabsList>
+
+                                    <div className="mb-6 px-1">
+                                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 ml-1">Calling From</p>
+                                        <Select
+                                            value={selectedSipAccountId || ""}
+                                            onValueChange={(val) => {
+                                                setSelectedSipAccountId(val);
+                                                SipService.getInstance().activeUAId = val;
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full h-11 bg-muted/20 border-white/5 rounded-xl">
+                                                <SelectValue placeholder="Select SIP Account" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-background/95 backdrop-blur-xl border-white/10 rounded-xl">
+                                                {sipAccounts?.map((acc) => (
+                                                    <SelectItem key={acc.id} value={acc.id} className="rounded-lg focus:bg-primary/10">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={cn(
+                                                                "h-1.5 w-1.5 rounded-full",
+                                                                SipService.getInstance().isRegistered(acc.id) ? "bg-green-500" : "bg-muted-foreground/30"
+                                                            )} />
+                                                            <span className="text-sm font-medium">{acc.name || acc.sip_username}</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                                {(!sipAccounts || sipAccounts.length === 0) && (
+                                                    <SelectItem value="demo" className="rounded-lg focus:bg-primary/10">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                                            <span className="text-sm font-medium">Demo Line</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
                                     <TabsContent value="dial" className="mt-0 outline-none">
                                         <DialerPad
                                             currentNumber={currentNumber}

@@ -62,6 +62,8 @@ interface DialerState {
     toggleAutoDialerPause: () => void;
     terminateAutoDialer: () => void;
     skipCurrent: () => void;
+    selectedSipAccountId: string | null;
+    setSelectedSipAccountId: (id: string | null) => void;
 }
 
 export const useDialerStore = create<DialerState>((set, get) => ({
@@ -150,6 +152,8 @@ export const useDialerStore = create<DialerState>((set, get) => ({
             set({ currentNumber: "" });
         }
     },
+    selectedSipAccountId: null,
+    setSelectedSipAccountId: (id) => set({ selectedSipAccountId: id }),
 }));
 
 // ===== Command Palette Store =====

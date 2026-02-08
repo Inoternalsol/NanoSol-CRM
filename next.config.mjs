@@ -8,21 +8,16 @@ const withSerwist = withSerwistInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    /* config options here */
+    /* 
+      Cleaned up to resolve Webpack runtime TypeErrors in Next.js 15 / React 19.
+      Removed esmExternals: 'loose' and transpilePackages: ['framer-motion'] 
+      as they are often unnecessary and can conflict with the new bundler.
+    */
     eslint: {
-        // Warning: This allows production builds to successfully complete even if
-        // your project has ESLint errors.
         ignoreDuringBuilds: true,
     },
     typescript: {
-        // Also ignore TS errors if any minor ones remain in static generation
         ignoreBuildErrors: true,
-    },
-    // Fix framer-motion bundling issues during static generation
-    transpilePackages: ['framer-motion'],
-    experimental: {
-        // Use native ESM for external packages
-        esmExternals: 'loose',
     },
 };
 
