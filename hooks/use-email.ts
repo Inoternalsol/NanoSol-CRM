@@ -40,9 +40,32 @@ async function fetchSMTPConfigs(): Promise<SMTPConfig[]> {
     return data || [];
 }
 
+async function fetchEmails(url: string) {
+    const res = await fetch(url);
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to fetch emails");
+    }
+    return res.json();
+}
+
 // ============================================
 // SWR HOOKS
 // ============================================
+
+export function useEmails(folder: string = "inbox", page: number = 1, limit: number = 50) {
+    const key = `/api/email?folder=${folder}&page=${page}&limit=${limit}`;
+    const swr = useSWR(key, fetchEmails, {
+        revalidateOnFocus: false,
+    });
+
+    // Realtime subscription for emails
+    // We subscribe to the 'emails' table and invalidate the key on change
+    const realtimeKey = useMemo(() => (key: unknown) => typeof key === "string" && key.startsWith("/api/email"), []);
+    useRealtime("emails", realtimeKey);
+
+    return swr;
+}
 
 export function useEmailTemplates() {
     const swr = useSWR<EmailTemplate[]>("email-templates", fetchEmailTemplates, {
@@ -72,6 +95,34 @@ export function useSMTPConfigs() {
     useRealtime("smtp_configs", "smtp-configs");
 
     return swr;
+}
+
+// ============================================
+// MUTATION HOOKS - EMAILS
+// ============================================
+
+export function useEmailBatchAction() {
+    return useSWRMutation(
+        "/api/email/batch",
+        async (url, { arg }: { arg: { emailIds: string[], action: 'delete' | 'move' | 'mark_read' | 'mark_unread', destination?: string } }) => {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(arg),
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || "Failed to perform batch action");
+            }
+            return res.json();
+        },
+        {
+            onSuccess: () => {
+                // Invalidate email queries
+                mutate((key) => typeof key === "string" && key.startsWith("/api/email"), undefined, { revalidate: true });
+            }
+        }
+    );
 }
 
 // ============================================

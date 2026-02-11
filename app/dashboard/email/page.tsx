@@ -17,19 +17,18 @@ import {
     Loader2,
     Edit,
     Zap,
+    MailOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useEmailTemplates, useDeleteEmailTemplate, useEmailSequences, useActiveProfile, useDeleteEmailSequence, useUpdateEmailSequence, useSMTPConfigs } from "@/hooks/use-data";
+import { useEmails, useEmailBatchAction } from "@/hooks/use-email";
 import { useRealtime } from "@/hooks/use-realtime";
-import { useEmails } from "@/hooks/use-inbox";
 import { TemplateDialog } from "@/components/email/template-dialog";
 import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
 import { SequenceDialog } from "@/components/email/sequence-dialog";
@@ -41,15 +40,19 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuTrigger,
+    DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Play, Pause } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 
 // Note: Email inbox would need IMAP/API integration - templates work with database
 
 // Email folders type
-type EmailFolder = "inbox" | "sent" | "starred" | "archive" | "trash";
+type EmailFolder = "inbox" | "sent" | "starred" | "archive" | "trash" | "sequences" | "templates";
+
+// ... existing interfaces ...
 
 export default function EmailPage() {
     const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
@@ -59,26 +62,50 @@ export default function EmailPage() {
     const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
     const [selectedSequence, setSelectedSequence] = useState<EmailSequence | null>(null);
     const [activeFolder, setActiveFolder] = useState<EmailFolder>("inbox");
-    const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
+    const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
     const [isSyncing, setIsSyncing] = useState(false);
     const [isProcessingSequences, setIsProcessingSequences] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
 
     const { data: templates = [], isLoading: templatesLoading, mutate: mutateTemplates } = useEmailTemplates();
     const { data: sequences = [], mutate: mutateSequences } = useEmailSequences();
     const { data: smtpConfigs = [] } = useSMTPConfigs();
-    const { data: emails, isLoading: emailsLoading } = useEmails(activeFolder, selectedAccountId);
+    const { trigger: batchAction, isMutating: isBatchMutating } = useEmailBatchAction();
+
+    // Fetch emails
+    const { data: emailsData, isLoading: emailsLoading, mutate: mutateEmails } = useEmails(activeFolder, currentPage, itemsPerPage);
+    const emails: Email[] = emailsData?.data || [];
+    const totalEmails = emailsData?.meta?.total || 0;
+    const totalPages = Math.ceil(totalEmails / itemsPerPage);
+
 
     const { trigger: deleteTemplate } = useDeleteEmailTemplate();
     const { trigger: deleteSequence } = useDeleteEmailSequence();
     const { trigger: updateSequence } = useUpdateEmailSequence();
     const { data: activeProfile } = useActiveProfile();
 
-    const handleSync = () => {
+    const handleSync = async () => {
         setIsSyncing(true);
-        setTimeout(() => {
+        try {
+            const res = await fetch("/api/email/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ organization_id: activeProfile?.organization_id })
+            });
+            const result = await res.json();
+            if (result.success) {
+                toast.success("Sync completed");
+                mutateEmails();
+            } else {
+                toast.error("Sync failed", { description: result.error });
+            }
+        } catch (error) {
+            console.error("Sync error:", error);
+            toast.error("Failed to sync emails");
+        } finally {
             setIsSyncing(false);
-            toast.success("Inbox synced via IMAP");
-        }, 3000);
+        }
     };
 
     // Helper to format date
@@ -192,12 +219,72 @@ export default function EmailPage() {
         setEnrollmentManagerOpen(true);
     };
 
+    // New Functions for Selection & Batch Actions
+
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            const allIds = new Set(emails.map(e => e.id));
+            setSelectedEmails(allIds);
+        } else {
+            setSelectedEmails(new Set());
+        }
+    };
+
+    const handleSelectEmail = (id: string, checked: boolean) => {
+        const newSelected = new Set(selectedEmails);
+        if (checked) {
+            newSelected.add(id);
+        } else {
+            newSelected.delete(id);
+        }
+        setSelectedEmails(newSelected);
+    };
+
+    const handleBatchAction = async (action: 'delete' | 'archive' | 'mark_read' | 'mark_unread') => {
+        if (selectedEmails.size === 0) return;
+
+        try {
+            let destination: string | undefined;
+
+            if (action === 'archive') {
+                destination = 'archive';
+            } else if (action === 'delete') {
+                // If in trash, delete permanently, else move to trash
+                if (activeFolder !== 'trash') {
+                    destination = 'trash';
+                }
+            }
+
+            // Map UI actions to API actions
+            let apiAction: 'delete' | 'move' | 'mark_read' | 'mark_unread' = action;
+            if (action === 'archive' || (action === 'delete' && activeFolder !== 'trash')) {
+                apiAction = 'move';
+            } else if (action === 'delete' && activeFolder === 'trash') {
+                apiAction = 'delete';
+            }
+
+            await batchAction({
+                emailIds: Array.from(selectedEmails),
+                action: apiAction,
+                destination
+            });
+
+            toast.success(`Emails ${action}d`);
+            setSelectedEmails(new Set());
+            mutateEmails();
+        } catch (error) {
+            console.error("Batch action failed:", error);
+            toast.error("Failed to update emails");
+        }
+    };
+
     // Real-time synchronization
     const realtimeKey = useMemo(() => (key: unknown) =>
         typeof key === "string" && (key === "email-sequences" || key.startsWith("sequence-enrollments")),
         []);
     useRealtime("email_sequences", realtimeKey);
     useRealtime("sequence_enrollments", realtimeKey);
+
     return (
         <motion.div
             initial={{ opacity: 0 }}
@@ -213,10 +300,6 @@ export default function EmailPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" onClick={() => setSequenceOpen(true)}>
-                        <Clock className="h-4 w-4 mr-2" />
-                        Sequences
-                    </Button>
                     <Button onClick={() => setComposerOpen(true)}>
                         <Plus className="h-4 w-4 mr-2" />
                         Compose
@@ -226,201 +309,258 @@ export default function EmailPage() {
 
             <div className="grid gap-6 lg:grid-cols-4">
                 {/* Sidebar */}
-                <Card className="lg:col-span-1">
+                <Card className="lg:col-span-1 border-border/50 bg-card/50 backdrop-blur-sm">
                     <CardContent className="p-4">
-                        <h3 className="mb-2 px-2 text-sm font-semibold tracking-tight">
-                            Mailboxes
-                        </h3>
+                        <Button
+                            className="w-full mb-4 shadow-sm"
+                            size="lg"
+                            onClick={() => setComposerOpen(true)}
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Compose
+                        </Button>
                         <div className="space-y-1">
                             <Button
                                 variant={activeFolder === "inbox" ? "secondary" : "ghost"}
-                                className="w-full justify-start"
-                                onClick={() => setActiveFolder("inbox")}
+                                className={cn("w-full justify-start", activeFolder === "inbox" && "font-semibold")}
+                                onClick={() => { setActiveFolder("inbox"); setCurrentPage(1); }}
                             >
                                 <Inbox className="mr-2 h-4 w-4" />
                                 Inbox
                             </Button>
                             <Button
                                 variant={activeFolder === "sent" ? "secondary" : "ghost"}
-                                className="w-full justify-start"
-                                onClick={() => setActiveFolder("sent")}
+                                className={cn("w-full justify-start", activeFolder === "sent" && "font-semibold")}
+                                onClick={() => { setActiveFolder("sent"); setCurrentPage(1); }}
                             >
                                 <Send className="mr-2 h-4 w-4" />
                                 Sent
                             </Button>
                             <Button
                                 variant={activeFolder === "starred" ? "secondary" : "ghost"}
-                                className="w-full justify-start"
-                                onClick={() => setActiveFolder("starred")}
+                                className={cn("w-full justify-start", activeFolder === "starred" && "font-semibold")}
+                                onClick={() => { setActiveFolder("starred"); setCurrentPage(1); }}
                             >
                                 <Star className="mr-2 h-4 w-4" />
                                 Starred
                             </Button>
                             <Button
                                 variant={activeFolder === "archive" ? "secondary" : "ghost"}
-                                className="w-full justify-start"
-                                onClick={() => setActiveFolder("archive")}
+                                className={cn("w-full justify-start", activeFolder === "archive" && "font-semibold")}
+                                onClick={() => { setActiveFolder("archive"); setCurrentPage(1); }}
                             >
                                 <Archive className="mr-2 h-4 w-4" />
                                 Archive
                             </Button>
                             <Button
                                 variant={activeFolder === "trash" ? "secondary" : "ghost"}
-                                className="w-full justify-start"
-                                onClick={() => setActiveFolder("trash")}
+                                className={cn("w-full justify-start", activeFolder === "trash" && "font-semibold")}
+                                onClick={() => { setActiveFolder("trash"); setCurrentPage(1); }}
                             >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Trash
                             </Button>
                         </div>
+
                         <Separator className="my-4" />
-                        <h3 className="mb-2 px-2 text-sm font-semibold tracking-tight">
-                            Accounts
+
+                        <h3 className="mb-2 px-2 text-xs font-semibold tracking-tight text-muted-foreground uppercase">
+                            Automation
                         </h3>
                         <div className="space-y-1">
                             <Button
-                                variant={selectedAccountId === "all" ? "secondary" : "ghost"}
-                                className="w-full justify-start text-xs"
-                                onClick={() => setSelectedAccountId("all")}
+                                variant={activeFolder === "sequences" ? "secondary" : "ghost"}
+                                className={cn("w-full justify-start", activeFolder === "sequences" && "font-semibold")}
+                                onClick={() => setActiveFolder("sequences")}
                             >
-                                All Accounts
+                                <Zap className="mr-2 h-4 w-4" />
+                                Sequences
                             </Button>
-                            {smtpConfigs?.map(account => (
-                                <Button
-                                    key={account.id}
-                                    variant={selectedAccountId === account.id ? "secondary" : "ghost"}
-                                    className="w-full justify-start text-xs truncate"
-                                    onClick={() => setSelectedAccountId(account.id)}
-                                >
-                                    {account.email_addr}
-                                </Button>
-                            ))}
+                            <Button
+                                variant={activeFolder === "templates" ? "secondary" : "ghost"}
+                                className={cn("w-full justify-start", activeFolder === "templates" && "font-semibold")}
+                                onClick={() => setActiveFolder("templates")}
+                            >
+                                <Mail className="mr-2 h-4 w-4" />
+                                Templates
+                            </Button>
                         </div>
 
                         <Separator className="my-4" />
-
-                        <div>
-                            <h4 className="text-sm font-semibold mb-2">Quick Stats</h4>
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Sent Today</span>
-                                    <span className="font-medium">24</span>
+                        <h3 className="mb-2 px-2 text-xs font-semibold tracking-tight text-muted-foreground uppercase">
+                            Accounts
+                        </h3>
+                        <div className="space-y-1">
+                            {smtpConfigs?.map(account => (
+                                <div key={account.id} className="flex items-center px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 rounded-md cursor-pointer transition-colors">
+                                    <div className={cn("h-2 w-2 rounded-full mr-2", account.is_active ? "bg-green-500" : "bg-red-500")} />
+                                    <span className="truncate">{account.email_addr}</span>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Open Rate</span>
-                                    <span className="font-medium">45%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Click Rate</span>
-                                    <span className="font-medium">12%</span>
-                                </div>
-                            </div>
+                            ))}
+                            {smtpConfigs?.length === 0 && (
+                                <p className="text-xs text-muted-foreground px-2">No accounts configured</p>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Main Content */}
                 <div className="lg:col-span-3">
-                    <Tabs defaultValue="inbox">
-                        <TabsList className="mb-4">
+                    <Tabs defaultValue="inbox" value={['sequences', 'templates'].includes(activeFolder) ? activeFolder : 'inbox'}>
+                        <TabsList className="hidden">
                             <TabsTrigger value="inbox">Inbox</TabsTrigger>
                             <TabsTrigger value="sequences">Sequences</TabsTrigger>
                             <TabsTrigger value="templates">Templates</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="inbox">
-                            <Card>
-                                <CardHeader className="pb-3 border-b">
-                                    <div className="flex flex-col sm:flex-row items-center gap-4">
-                                        <div className="relative flex-1 w-full">
-                                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                            <Input placeholder="Search emails..." className="pl-10" />
-                                        </div>
+                        {/* We reuse 'inbox' tab for all email lists */}
+                        <TabsContent value="inbox" className="mt-0">
+                            <Card className="border-border/50 shadow-sm">
+                                <CardHeader className="p-4 border-b flex flex-row items-center justify-between space-y-0">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            checked={emails.length > 0 && selectedEmails.size === emails.length}
+                                            onCheckedChange={handleSelectAll}
+                                        />
+
+                                        {selectedEmails.size > 0 ? (
+                                            <div className="flex items-center gap-2 ml-2 animate-in fade-in slide-in-from-left-2 duration-200">
+                                                <Button variant="ghost" size="sm" onClick={() => handleBatchAction('archive')} disabled={isBatchMutating}>
+                                                    <Archive className="h-4 w-4 mr-2" />
+                                                    Archive
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => handleBatchAction('delete')} disabled={isBatchMutating} className="text-destructive hover:text-destructive">
+                                                    <Trash2 className="h-4 w-4 mr-2" />
+                                                    Delete
+                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="start">
+                                                        <DropdownMenuItem onClick={() => handleBatchAction('mark_read')}>
+                                                            <MailOpen className="h-4 w-4 mr-2" />
+                                                            Mark as read
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleBatchAction('mark_unread')}>
+                                                            <Mail className="h-4 w-4 mr-2" />
+                                                            Mark as unread
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                                <span className="text-sm text-muted-foreground ml-2 border-l pl-3">
+                                                    {selectedEmails.size} selected
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="relative ml-4">
+                                                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    placeholder={`Search ${activeFolder}...`}
+                                                    className="pl-9 h-9 w-[250px] bg-muted/30 border-none focus-visible:ring-1"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
                                         <Button
-                                            variant="outline"
+                                            variant="ghost"
                                             size="sm"
                                             onClick={handleSync}
                                             disabled={isSyncing}
+                                            className="h-8 w-8 p-0"
                                         >
                                             <motion.div
                                                 animate={isSyncing ? { rotate: 360 } : {}}
                                                 transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                                             >
-                                                <Zap className={cn("h-4 w-4 mr-2", isSyncing && "text-primary")} />
+                                                <Zap className={cn("h-4 w-4", isSyncing && "text-primary fill-primary")} />
                                             </motion.div>
-                                            {isSyncing ? "Syncing..." : "Sync Inbox"}
+                                            <span className="sr-only">Sync</span>
                                         </Button>
+                                        <PaginationControls
+                                            currentPage={currentPage}
+                                            totalPages={totalPages}
+                                            onPageChange={setCurrentPage}
+                                            totalItems={totalEmails}
+                                            itemsPerPage={itemsPerPage}
+                                        />
                                     </div>
                                 </CardHeader>
-                                <CardContent className="p-0 relative">
-                                    {isSyncing && (
-                                        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                                <p className="text-sm font-medium">Connecting to IMAP...</p>
-                                            </div>
+                                <CardContent className="p-0 min-h-[500px] relative">
+                                    {emailsLoading ? (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                         </div>
-                                    )}
-                                    <ScrollArea className="h-[500px]">
-                                        {emailsLoading ? (
-                                            <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                                                <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                                                <span>Loading emails...</span>
+                                    ) : null}
+
+                                    {!emailsLoading && emails.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                                            <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                                                <Inbox className="h-8 w-8 opacity-50" />
                                             </div>
-                                        ) : !emails || emails.length === 0 ? (
-                                            <div className="p-8 text-center text-muted-foreground">
-                                                No emails found in {activeFolder}.
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col">
-                                                {emails.map((email) => (
-                                                    <div
-                                                        key={email.id}
-                                                        className={cn(
-                                                            "flex flex-col gap-1 p-4 border-b hover:bg-accent cursor-pointer transition-colors",
-                                                            !email.is_read && "bg-muted/50 font-medium"
-                                                        )}
-                                                    >
-                                                        <div className="flex items-center justify-between gap-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <Avatar className="h-8 w-8">
-                                                                    <AvatarFallback>
-                                                                        {email.from_addr[0].toUpperCase()}
-                                                                    </AvatarFallback>
-                                                                </Avatar>
-                                                                <span className={cn("text-sm", !email.is_read && "font-semibold")}>
-                                                                    {email.from_addr}
+                                            <p className="text-lg font-medium">No emails found</p>
+                                            <p className="text-sm">Your {activeFolder} is empty.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col">
+                                            {emails.map((email) => (
+                                                <div
+                                                    key={email.id}
+                                                    className={cn(
+                                                        "group flex items-center gap-4 p-4 border-b hover:bg-muted/30 transition-colors relative",
+                                                        !email.is_read && "bg-muted/20 font-medium",
+                                                        selectedEmails.has(email.id) && "bg-accent/40"
+                                                    )}
+                                                >
+                                                    <Checkbox
+                                                        checked={selectedEmails.has(email.id)}
+                                                        onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
+                                                        className="mr-2"
+                                                    />
+
+                                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { /* Open email detail */ }}>
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span className={cn("text-sm truncate max-w-[180px]", !email.is_read ? "font-semibold text-foreground" : "text-muted-foreground")}>
+                                                                    {email.from_name || email.from_addr}
                                                                 </span>
+                                                                {email.has_attachment && <Paperclip className="h-3 w-3 text-muted-foreground" />}
                                                             </div>
-                                                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                                                                 {formatTime(email.received_at)}
                                                             </span>
                                                         </div>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <span className="text-sm truncate flex-1">
-                                                                {email.subject || "(No Subject)"}
+                                                        <div className="flex items-center justify-between">
+                                                            <span className={cn("text-sm truncate max-w-[400px]", !email.is_read && "font-medium")}>
+                                                                {email.subject || '(No Subject)'}
+                                                                <span className="text-muted-foreground font-normal mx-2">-</span>
+                                                                <span className="text-muted-foreground font-normal">
+                                                                    {(email.body_text || "").substring(0, 60)}...
+                                                                </span>
                                                             </span>
-                                                            <div className="flex items-center gap-1">
-                                                                {email.has_attachment && (
-                                                                    <Paperclip className="h-3 w-3 text-muted-foreground" />
-                                                                )}
-                                                                {email.is_starred && (
-                                                                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                                                )}
-                                                            </div>
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground line-clamp-2">
-                                                            {(email.body_text || email.body_html || "").replace(/<[^>]*>?/gm, "").substring(0, 100)}
-                                                        </p>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </ScrollArea>
+
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-4 bg-background/80 backdrop-blur-sm p-1 rounded-md shadow-sm border">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleBatchAction("archive")}>
+                                                            <Archive className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleBatchAction("delete")}>
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>
 
+                        {/* Sequences & Templates Content (Keep existing if needed, or move to separate page) */}
                         <TabsContent value="sequences">
                             <Card>
                                 <CardHeader>
