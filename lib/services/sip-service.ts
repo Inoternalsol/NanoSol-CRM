@@ -65,6 +65,14 @@ export class SipService {
         // If already connected for this ID, don't re-connect
         if (this.uas.has(id) && this._isConnected.get(id)) return;
 
+        // Special handling for demo mode - don't attempt real SIP connection
+        if (config.uri.includes("demo.local") || id === "demo" || id === "default") {
+            console.log(`[SIP] Entering demo mode for account ${id}`);
+            this.enableDemoMode(id);
+            if (!this._activeUAId) this._activeUAId = id;
+            return;
+        }
+
         try {
             console.log(`[SIP] Connecting account ${id}: ${config.uri}`);
             console.log(`[SIP] WebSocket servers:`, config.ws_servers);
@@ -108,7 +116,6 @@ export class SipService {
                 ws_servers: config.ws_servers,
                 display_name: config.display_name
             });
-            if (id === "default") this.enableDemoMode("default");
         }
     }
 
@@ -278,9 +285,16 @@ export class SipService {
         });
 
         ua.on('registrationFailed', (data) => {
-            console.error(`[SIP] ❌ Account ${id} registration failed:`, data);
-            console.error(`[SIP] Response:`, data?.response);
-            console.error(`[SIP] Cause:`, data?.cause);
+            const statusCode = data?.response?.status_code;
+            const reasonPhrase = data?.response?.reason_phrase;
+            const cause = data?.cause || 'Unknown';
+
+            console.warn(
+                `[SIP] ⚠ Account ${id} registration failed — ` +
+                `Cause: ${cause}` +
+                (statusCode ? ` | Status: ${statusCode} ${reasonPhrase || ''}` : '')
+            );
+
             this._isRegistered.set(id, false);
         });
 
