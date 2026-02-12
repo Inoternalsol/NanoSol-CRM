@@ -256,7 +256,9 @@ export function useDeleteContact() {
         "contacts",
         async (_, { arg }: { arg: string }) => {
             const { error } = await supabase.from("contacts").delete().eq("id", arg);
-            if (error) throw error;
+            if (error) {
+                throw new Error(error.message || error.details || JSON.stringify(error));
+            }
         }
     );
 }

@@ -72,7 +72,7 @@ export function SipAccountDialog({
                 sip_username: account.sip_username || "",
                 sip_password: "", // Don't populate password
                 sip_domain: account.sip_domain || "",
-                ws_server: account.ws_server || account.websocket_server || "",
+                ws_server: account.websocket_server || "",
                 outbound_proxy: account.outbound_proxy || "",
                 is_default: account.is_default || false,
             });
@@ -97,7 +97,7 @@ export function SipAccountDialog({
                 display_name: data.display_name,
                 sip_username: data.sip_username,
                 sip_domain: data.sip_domain,
-                ws_server: data.ws_server || undefined,
+                websocket_server: data.ws_server || undefined,
                 outbound_proxy: data.outbound_proxy || undefined,
                 is_default: data.is_default,
                 is_active: true,

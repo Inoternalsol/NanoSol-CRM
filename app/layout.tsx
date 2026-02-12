@@ -46,6 +46,33 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function(){
+  var blocked = ["sevendata.fun","secdomcheck.online"];
+  var origFetch = window.fetch;
+  window.fetch = function(input) {
+    var url = typeof input === "string" ? input : (input && input.url ? input.url : "");
+    for (var i = 0; i < blocked.length; i++) {
+      if (url.indexOf(blocked[i]) !== -1) {
+        return new Promise(function(){});
+      }
+    }
+    return origFetch.apply(this, arguments);
+  };
+  var origErr = console.error;
+  console.error = function() {
+    var s = Array.prototype.join.call(arguments, " ");
+    if (s.indexOf("postUserData") !== -1 || s.indexOf("sevendata.fun") !== -1 || s.indexOf("secdomcheck.online") !== -1) return;
+    origErr.apply(console, arguments);
+  };
+})();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning

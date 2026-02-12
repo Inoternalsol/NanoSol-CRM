@@ -15,8 +15,11 @@ export function useActiveProfile() {
     return useSWR<Profile | null>("active-profile", async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return null;
-        const { data, error } = await supabase.from("profiles").select("*").eq("user_id", user.id).single();
-        if (error) return null;
+        const { data, error } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+        if (error) {
+            console.error("Error fetching active profile:", error);
+            return null;
+        }
         return data;
     });
 }

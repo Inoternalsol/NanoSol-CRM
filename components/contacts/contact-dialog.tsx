@@ -129,6 +129,10 @@ export function ContactDialog({
                 });
                 toast.success("Contact updated successfully");
             } else {
+                if (!organizationId) {
+                    toast.error("Organization ID is missing.");
+                    return;
+                }
                 await createContact({
                     ...data,
                     organization_id: organizationId,

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ringtone Generator</title>
+</head>
+
+<body>
+    <h1>Generate Ringtone</h1>
+    <button id="generate">Generate & Download Ringtone</button>
+    <audio id="preview" controls></audio>
+
+    <script>
+        document.getElementById('generate').addEventListener('click', function () {
+            // Create audio context
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const sampleRate = audioContext.sampleRate;
+            const duration = 2; // 2 seconds
+            const buffer = audioContext.createBuffer(1, sampleRate * duration, sampleRate);
+            const channel = buffer.getChannelData(0);
+
+            // Generate UK-style ringtone (double ring pattern)
+            for (let i = 0; i < buffer.length; i++) {
+                const t = i / sampleRate;
+                let value = 0;
+
+                // Two short bursts
+                if ((t < 0.4 || (t > 0.5 && t < 0.9))) {
+                    // Mix 400Hz and 450Hz frequencies (UK standard)
+                    value = Math.sin(2 * Math.PI * 400 * t) * 0.3 +
+                        Math.sin(2 * Math.PI * 450 * t) * 0.3;
+
+                    // Apply envelope for smooth on/off
+                    const phase = (t < 0.4) ? t : (t - 0.5);
+                    const envelope = Math.min(phase * 20, 1) * Math.min((0.4 - phase) * 20, 1);
+                    value *= envelope;
+                }
+
+                channel[i] = value;
+            }
+
+            // Create offline context to render
+            const offlineContext = new OfflineAudioContext(1, buffer.length, sampleRate);
+            const source = offlineContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(offlineContext.destination);
+            source.start();
+
+            offlineContext.startRendering().then(function (renderedBuffer) {
+                // Convert to WAV
+                const wav = audioBufferToWav(renderedBuffer);
+                const blob = new Blob([wav], { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+
+                // Preview
+                document.getElementById('preview').src = url;
+
+                // Download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ringtone.wav';
+                a.click();
+            });
+        });
+
+        // Convert AudioBuffer to WAV
+        function audioBufferToWav(buffer) {
+            const length = buffer.length * buffer.numberOfChannels * 2 + 44;
+            const arrayBuffer = new ArrayBuffer(length);
+            const view = new DataView(arrayBuffer);
+            const channels = [];
+            let offset = 0;
+            let pos = 0;
+
+            // Write WAV header
+            setUint32(0x46464952); // "RIFF"
+            setUint32(length - 8); // file length - 8
+            setUint32(0x45564157); // "WAVE"
+            setUint32(0x20746d66); // "fmt " chunk
+            setUint32(16); // length = 16
+            setUint16(1); // PCM (uncompressed)
+            setUint16(buffer.numberOfChannels);
+            setUint32(buffer.sampleRate);
+            setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels); // avg. bytes/sec
+            setUint16(buffer.numberOfChannels * 2); // block-align
+            setUint16(16); // 16-bit
+            setUint32(0x61746164); // "data" - chunk
+            setUint32(length - pos - 4); // chunk length
+
+            // Write interleaved data
+            for (let i = 0; i < buffer.numberOfChannels; i++) {
+                channels.push(buffer.getChannelData(i));
+            }
+
+            while (pos < length) {
+                for (let i = 0; i < buffer.numberOfChannels; i++) {
+                    const sample = Math.max(-1, Math.min(1, channels[i][offset]));
+                    view.setInt16(pos, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    pos += 2;
+                }
+                offset++;
+            }
+
+            return arrayBuffer;
+
+            function setUint16(data) {
+                view.setUint16(pos, data, true);
+                pos += 2;
+            }
+
+            function setUint32(data) {
+                view.setUint32(pos, data, true);
+                pos += 4;
+            }
+        }
+    </script>
+</body>
+
+</html>

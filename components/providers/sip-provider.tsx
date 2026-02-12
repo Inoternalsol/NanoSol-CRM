@@ -59,11 +59,38 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
             if (sipProfiles && sipProfiles.length > 0) {
                 sipProfiles.forEach(sipProfile => {
-                    const wsUrl = sipProfile.ws_server
-                        ? sipProfile.ws_server
-                        : sipProfile.outbound_proxy
-                            ? `wss://${sipProfile.outbound_proxy}`
-                            : `wss://${sipProfile.sip_domain}`;
+                    let wsUrl;
+
+                    if (sipProfile.websocket_server) {
+                        // Use explicit websocket server if provided
+                        wsUrl = sipProfile.websocket_server;
+                    } else if (sipProfile.outbound_proxy) {
+                        // Construct WebSocket URL from outbound proxy
+                        const proxy = sipProfile.outbound_proxy;
+
+                        // Check if it already has wss:// protocol
+                        if (proxy.startsWith('wss://') || proxy.startsWith('ws://')) {
+                            wsUrl = proxy;
+                        } else {
+                            // Add protocol and default WebSocket path if not present
+                            // Check if port is already included
+                            const hasPort = proxy.includes(':');
+                            const hasPath = proxy.includes('/');
+
+                            if (hasPort && hasPath) {
+                                wsUrl = `wss://${proxy}`;
+                            } else if (hasPort) {
+                                // Has port but no path - no path needed for Commpeak
+                                wsUrl = `wss://${proxy}`;
+                            } else {
+                                // No port, no path - add default :7443 for Commpeak WebRTC
+                                wsUrl = `wss://${proxy}:7443`;
+                            }
+                        }
+                    } else {
+                        // Fallback to sip_domain with default WebSocket port (Commpeak standard)
+                        wsUrl = `wss://${sipProfile.sip_domain}:7443`;
+                    }
 
                     console.log(`[SIP] Connecting account ${sipProfile.name} to ${wsUrl} as ${sipProfile.sip_username}@${sipProfile.sip_domain}`);
 

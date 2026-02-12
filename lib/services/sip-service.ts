@@ -67,8 +67,14 @@ export class SipService {
 
         try {
             console.log(`[SIP] Connecting account ${id}: ${config.uri}`);
+            console.log(`[SIP] WebSocket servers:`, config.ws_servers);
             const wsServer = Array.isArray(config.ws_servers) ? config.ws_servers[0] : config.ws_servers;
+            console.log(`[SIP] Using WebSocket server:`, wsServer);
+
             const socket = new JsSIP.WebSocketInterface(wsServer);
+
+            // Add WebSocket event listeners for debugging
+            socket.via_transport = "wss";
 
             const ua = new JsSIP.UA({
                 uri: config.uri,
@@ -76,10 +82,19 @@ export class SipService {
                 display_name: config.display_name,
                 sockets: [socket],
                 register: true,
+                session_timers: false,
+                connection_recovery_min_interval: 2,
+                connection_recovery_max_interval: 30,
             });
 
             this.uas.set(id, ua);
             this.setupEventHandlers(id);
+
+            // Log UA events for debugging
+            ua.on('connecting', () => {
+                console.log(`[SIP] Account ${id} connecting...`);
+            });
+
             ua.start();
 
             // Set as active if it's the first one or if none active
@@ -87,7 +102,12 @@ export class SipService {
                 this._activeUAId = id;
             }
         } catch (error) {
-            console.error(`Failed to initialize SIP UA for ${id}:`, error);
+            console.error(`[SIP] Failed to initialize SIP UA for ${id}:`, error);
+            console.error(`[SIP] Config was:`, {
+                uri: config.uri,
+                ws_servers: config.ws_servers,
+                display_name: config.display_name
+            });
             if (id === "default") this.enableDemoMode("default");
         }
     }
@@ -237,23 +257,35 @@ export class SipService {
         if (!ua) return;
 
         ua.on('connected', () => {
-            console.log(`[SIP] Account ${id} connected`);
+            console.log(`[SIP] ✅ Account ${id} connected to WebSocket`);
             this._isConnected.set(id, true);
         });
-        ua.on('disconnected', () => {
-            console.log(`[SIP] Account ${id} disconnected`);
+
+        ua.on('disconnected', (data) => {
+            console.log(`[SIP] ❌ Account ${id} disconnected from WebSocket`, data);
+            console.log(`[SIP] Disconnect reason:`, data?.error || 'Unknown');
             this._isConnected.set(id, false);
         });
-        ua.on('registered', () => {
-            console.log(`[SIP] Account ${id} registered`);
+
+        ua.on('registered', (data) => {
+            console.log(`[SIP] ✅ Account ${id} successfully registered`, data);
             this._isRegistered.set(id, true);
         });
-        ua.on('unregistered', () => {
+
+        ua.on('unregistered', (data) => {
+            console.log(`[SIP] Account ${id} unregistered`, data);
             this._isRegistered.set(id, false);
         });
-        ua.on('registrationFailed', (e) => {
-            console.error(`[SIP] Account ${id} registration failed:`, e);
+
+        ua.on('registrationFailed', (data) => {
+            console.error(`[SIP] ❌ Account ${id} registration failed:`, data);
+            console.error(`[SIP] Response:`, data?.response);
+            console.error(`[SIP] Cause:`, data?.cause);
             this._isRegistered.set(id, false);
+        });
+
+        ua.on('registrationExpiring', () => {
+            console.log(`[SIP] Account ${id} registration expiring, will re-register...`);
         });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

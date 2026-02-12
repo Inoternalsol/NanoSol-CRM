@@ -36,7 +36,7 @@ export const updateContactSchema = createContactSchema.partial().extend({
 export const createDealSchema = z.object({
     organization_id: z.string().uuid(),
     contact_id: z.string().uuid().nullable().optional(),
-    title: z.string().min(1, "Deal title is required").max(200),
+    name: z.string().min(1, "Deal name is required").max(200),
     value: z.number().min(0).default(0),
     stage: z.enum(["lead", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"]).default("lead"),
     probability: z.number().min(0).max(100).default(0),
@@ -110,8 +110,8 @@ export const createCallLogSchema = z.object({
     user_id: z.string().uuid(),
     contact_id: z.string().uuid().nullable().optional(),
     direction: z.enum(["inbound", "outbound"]),
-    status: z.enum(["completed", "missed", "voicemail", "busy", "failed"]),
-    duration: z.number().int().min(0).default(0),
+    status: z.enum(["completed", "missed", "failed", "no_answer", "busy"]),
+    duration_seconds: z.number().int().min(0).default(0),
     started_at: z.string().datetime().optional(),
     ended_at: z.string().datetime().nullable().optional(),
     recording_url: z.string().url().nullable().optional(),
@@ -157,13 +157,11 @@ export const copilotMessageSchema = z.object({
 
 export const updateApiKeysSchema = z.object({
     organization_id: z.string().uuid(),
-    openai_api_key: z.string().nullable().optional(),
-    twilio_account_sid: z.string().nullable().optional(),
-    twilio_auth_token: z.string().nullable().optional(),
-    smtp_host: z.string().nullable().optional(),
-    smtp_port: z.number().int().nullable().optional(),
-    smtp_user: z.string().nullable().optional(),
-    smtp_password: z.string().nullable().optional(),
+    openai_key_encrypted: z.string().nullable().optional(),
+    gemini_key_encrypted: z.string().nullable().optional(),
+    qwen_key_encrypted: z.string().nullable().optional(),
+    kimi_key_encrypted: z.string().nullable().optional(),
+    active_provider: z.enum(["openai", "gemini", "qwen", "kimi"]).optional(),
 });
 
 // ============================================

@@ -17,10 +17,66 @@ END $$;
 -- 3. Hardening Utility Functions (SET search_path = public)
 -- This prevents search_path hijacking vulnerabilities.
 
+CREATE OR REPLACE FUNCTION public.get_current_user_role()
+RETURNS text AS $$
+  SELECT COALESCE((SELECT role FROM public.profiles WHERE user_id = auth.uid() LIMIT 1), 'viewer');
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.get_current_user_org()
+RETURNS uuid AS $$
+  SELECT organization_id FROM public.profiles WHERE user_id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.get_current_user_profile_id()
+RETURNS uuid AS $$
+  SELECT id FROM public.profiles WHERE user_id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+-- Legacy alias for compatibility
 CREATE OR REPLACE FUNCTION public.get_user_org_id()
 RETURNS UUID AS $$
-  SELECT organization_id FROM profiles WHERE user_id = auth.uid()
-$$ LANGUAGE SQL SECURITY DEFINER SET search_path = public;
+  SELECT get_current_user_org();
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+-- 4. Ensure required tracking columns exist (Idempotent)
+DO $$ 
+BEGIN 
+    -- For emails table
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'emails') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='emails' AND column_name='opens_count') THEN
+            ALTER TABLE emails ADD COLUMN opens_count INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='emails' AND column_name='clicks_count') THEN
+            ALTER TABLE emails ADD COLUMN clicks_count INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='emails' AND column_name='last_clicked_at') THEN
+            ALTER TABLE emails ADD COLUMN last_clicked_at TIMESTAMPTZ;
+        END IF;
+    END IF;
+
+    -- For sequence_enrollments (ensure organization_id exists)
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'sequence_enrollments') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sequence_enrollments' AND column_name='organization_id') THEN
+            ALTER TABLE sequence_enrollments ADD COLUMN organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+            
+            -- Backfill if possible
+            UPDATE sequence_enrollments e
+            SET organization_id = s.organization_id
+            FROM email_sequences s
+            WHERE e.sequence_id = s.id AND e.organization_id IS NULL;
+        END IF;
+    END IF;
+
+    -- For smtp_configs table (ensure multi-account support if not already migrated)
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'smtp_configs') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='smtp_configs' AND column_name='is_org_wide') THEN
+            ALTER TABLE smtp_configs ADD COLUMN is_org_wide BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='smtp_configs' AND column_name='user_id') THEN
+            ALTER TABLE smtp_configs ADD COLUMN user_id UUID REFERENCES profiles(id) ON DELETE CASCADE;
+        END IF;
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.update_updated_at()
 RETURNS TRIGGER AS $$
@@ -47,7 +103,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
--- 4. AI Semantic Search Functions (Include extensions schema in path for vector)
+-- 5. AI Semantic Search Functions (Include extensions schema in path for vector)
 
 CREATE OR REPLACE FUNCTION public.match_contacts (
   query_embedding VECTOR(1536),
@@ -488,9 +544,7 @@ DROP POLICY IF EXISTS "contacts_unified_access" ON contacts;
 CREATE POLICY "contacts_unified_access" ON contacts 
 FOR ALL TO authenticated 
 USING (
-    ((SELECT get_current_user_role()) IN ('admin', 'manager') AND organization_id = (SELECT get_current_user_org()))
-    OR
-    ((SELECT get_current_user_role()) = 'agent' AND owner_id = (SELECT get_current_user_profile_id()))
+    organization_id = (SELECT get_current_user_org())
 );
 
 -- 10.5 Deals
@@ -625,7 +679,7 @@ DROP POLICY IF EXISTS "profiles_unified_access" ON profiles;
 CREATE POLICY "profiles_unified_access" ON profiles 
 FOR ALL TO authenticated 
 USING (
-    user_id = (SELECT auth.uid())
+    user_id = auth.uid()
     OR
     organization_id = (SELECT get_current_user_org())
 );
@@ -637,6 +691,24 @@ DROP POLICY IF EXISTS "organizations_unified_access" ON organizations;
 CREATE POLICY "organizations_unified_access" ON organizations 
 FOR ALL TO authenticated 
 USING (id = (SELECT get_current_user_org()));
+
+-- 10.18 Sequence Enrollments
+DROP POLICY IF EXISTS "sequence_enrollments_unified_access" ON sequence_enrollments;
+CREATE POLICY "sequence_enrollments_unified_access" ON sequence_enrollments 
+FOR ALL TO authenticated 
+USING (organization_id = (SELECT get_current_user_org()));
+
+-- 10.19 Contact Statuses
+DROP POLICY IF EXISTS "contact_statuses_unified_access" ON contact_statuses;
+CREATE POLICY "contact_statuses_unified_access" ON contact_statuses 
+FOR ALL TO authenticated 
+USING (organization_id = (SELECT get_current_user_org()));
+
+-- 10.20 Notifications
+DROP POLICY IF EXISTS "notifications_unified_access" ON notifications;
+CREATE POLICY "notifications_unified_access" ON notifications 
+FOR ALL TO authenticated 
+USING (organization_id = (SELECT get_current_user_org()));
 
 -- ============================================
 -- 11. PERFORMANCE: FOREIGN KEY INDEXING
