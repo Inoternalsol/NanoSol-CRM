@@ -11,7 +11,6 @@ import {
     Building2,
     Download,
     Upload,
-    Loader2,
     Trash2,
     Settings2,
 } from "lucide-react";
@@ -42,7 +41,7 @@ import { ContactsEmptyState } from "@/components/ui/empty-state";
 import { toast } from "sonner";
 import { SequenceEnrollmentDialog } from "@/components/email/sequence-enrollment-dialog";
 import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
-import { useContactsPaginated, useDeleteContact, useUpdateContact, useProfiles, useActiveProfile } from "@/hooks/use-data";
+import { useContactsPaginated, useDeleteContact, useBulkDeleteContacts, useUpdateContact, useProfiles, useActiveProfile } from "@/hooks/use-data";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { ContactFilters, type ContactFilterValues } from "@/components/contacts/contact-filters";
 import { ImportDialog } from "@/components/contacts/import-dialog";
@@ -104,6 +103,7 @@ export default function ContactsPage() {
     const { data: profiles } = useProfiles();
     const { data: activeProfile } = useActiveProfile();
     const { trigger: deleteContact } = useDeleteContact();
+    const { trigger: bulkDeleteContacts } = useBulkDeleteContacts();
     const { trigger: updateContact } = useUpdateContact();
 
     // Unified handler to update filters and reset pagination/selection
@@ -135,15 +135,26 @@ export default function ContactsPage() {
         setDialogOpen(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this contact?")) return;
+    const handleDelete = async (id: string | string[]) => {
+        const count = Array.isArray(id) ? id.length : 1;
+        const confirmMessage = count > 1
+            ? `Are you sure you want to delete ${count} contacts?`
+            : "Are you sure you want to delete this contact?";
+
+        if (!confirm(confirmMessage)) return;
+
         try {
-            await deleteContact(id);
-            toast.success("Contact deleted");
+            if (Array.isArray(id)) {
+                await bulkDeleteContacts(id);
+            } else {
+                await deleteContact(id);
+            }
+            toast.success(count > 1 ? `${count} contacts deleted` : "Contact deleted");
+            if (Array.isArray(id)) setSelectedContacts([]);
             mutate();
         } catch (error) {
             const message = error instanceof Error ? error.message : "Unknown error occurred";
-            toast.error("Failed to delete contact", {
+            toast.error(count > 1 ? "Failed to delete contacts" : "Failed to delete contact", {
                 description: message
             });
         }
@@ -271,33 +282,21 @@ export default function ContactsPage() {
     };
 
     const handleBulkDelete = async () => {
-        const count = isSelectAllMatching ? totalItems : selectedContacts.length;
-        if (!confirm(`Are you sure you want to delete ${count} contacts?`)) return;
+        if (selectedContacts.length === 0) return;
+
+        if (isSelectAllMatching) {
+            // For safety, we disable bulk delete of "All Matching" for now unless we implement backend support
+            toast.error("Deleting 'All Matching' is disabled for safety. Please select specific contacts.");
+            return;
+        }
 
         // Safety: Prevent accidental massive deletion without explicit confirmation
-        if (isSelectAllMatching && count > 50) {
-            const userTyped = prompt(`To confirm deleting ${count} contacts, type "DELETE"`);
+        if (selectedContacts.length > 50) {
+            const userTyped = prompt(`To confirm deleting ${selectedContacts.length} contacts, type "DELETE"`);
             if (userTyped !== "DELETE") return;
         }
 
-        try {
-            if (isSelectAllMatching) {
-                // Should call an API route for safety, but using client loop for now (or ID list fetch)
-                // For safety, we disable bulk delete of "All Matching" for now unless we implement backend support
-                toast.error("Deleting 'All Matching' is disabled for safety. Please select specific contacts.");
-                return;
-            }
-
-            for (const id of selectedContacts) {
-                await deleteContact(id);
-            }
-            toast.success("Contacts deleted");
-            setSelectedContacts([]);
-            mutate();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "Unknown error occurred";
-            toast.error("Failed to delete some contacts", { description: message });
-        }
+        await handleDelete(selectedContacts);
     };
 
     const handleAssign = async (agentId: string) => {
@@ -675,8 +674,8 @@ export default function ContactsPage() {
                                                             <DropdownMenuItem onClick={() => handleSingleEnroll(contact.id)}>Add to Sequence</DropdownMenuItem>
                                                             <DropdownMenuItem
                                                                 className="text-destructive"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
+                                                                onSelect={(e) => {
+                                                                    e.preventDefault();
                                                                     handleDelete(contact.id);
                                                                 }}
                                                             >

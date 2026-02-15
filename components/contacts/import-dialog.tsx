@@ -131,94 +131,96 @@ export function ImportDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
+                <DialogHeader className="p-6 pb-2">
                     <DialogTitle>Import Contacts</DialogTitle>
                     <DialogDescription>
                         Upload a CSV file to bulk import contacts into your CRM.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
-                    <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-12 space-y-4 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            accept=".csv"
-                            onChange={handleFileChange}
-                            aria-label="Upload CSV file"
-                        />
-                        <div className="p-4 rounded-full bg-primary/10">
-                            <Upload className="h-8 w-8 text-primary" />
-                        </div>
-                        <div className="text-center">
-                            <p className="text-sm font-medium">
-                                {file ? file.name : "Click to select or drag and drop CSV file"}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Only .csv files are supported
-                            </p>
-                        </div>
-                        {file && (
-                            <Button variant="outline" size="sm" onClick={(e) => {
-                                e.stopPropagation();
-                                setFile(null);
-                                setPreview([]);
-                            }}>
-                                Change File
-                            </Button>
-                        )}
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium">Sample Data Format</Label>
-                            <Button variant="link" size="sm" className="h-auto p-0" onClick={handleDownloadTemplate}>
-                                <Download className="h-3.5 w-3.5 mr-1" />
-                                Download Template
-                            </Button>
-                        </div>
-
-                        {preview.length > 0 ? (
-                            <div className="rounded-md border overflow-hidden">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="bg-muted/50">
-                                            <TableHead className="text-[10px] uppercase font-bold py-2">First Name</TableHead>
-                                            <TableHead className="text-[10px] uppercase font-bold py-2">Email</TableHead>
-                                            <TableHead className="text-[10px] uppercase font-bold py-2">Company</TableHead>
-                                            <TableHead className="text-[10px] uppercase font-bold py-2">Status</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {preview.map((row, i) => (
-                                            <TableRow key={i}>
-                                                <TableCell className="text-xs py-2">{row.first_name}</TableCell>
-                                                <TableCell className="text-xs py-2">{row.email}</TableCell>
-                                                <TableCell className="text-xs py-2">{row.company}</TableCell>
-                                                <TableCell className="text-xs py-2">{row.status}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                <div className="flex-1 overflow-y-auto px-6 max-h-[calc(90vh-180px)]">
+                    <div className="space-y-6 py-4">
+                        <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-12 space-y-4 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept=".csv"
+                                onChange={handleFileChange}
+                                aria-label="Upload CSV file"
+                            />
+                            <div className="p-4 rounded-full bg-primary/10">
+                                <Upload className="h-8 w-8 text-primary" />
                             </div>
-                        ) : (
-                            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                                <div className="flex items-center gap-2 text-sm font-semibold">
-                                    <AlertCircle className="h-4 w-4 text-primary" />
-                                    Requirements
-                                </div>
-                                <p className="text-xs text-muted-foreground leading-relaxed">
-                                    Your CSV must contain the following required header: <code className="bg-muted px-1 rounded font-mono">first_name</code>.
-                                    Optional headers include: last_name, email, phone, company, status, lead_score.
+                            <div className="text-center">
+                                <p className="text-sm font-medium">
+                                    {file ? file.name : "Click to select or drag and drop CSV file"}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Only .csv files are supported
                                 </p>
                             </div>
-                        )}
+                            {file && (
+                                <Button variant="outline" size="sm" onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFile(null);
+                                    setPreview([]);
+                                }}>
+                                    Change File
+                                </Button>
+                            )}
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-sm font-medium">Sample Data Format</Label>
+                                <Button variant="link" size="sm" className="h-auto p-0" onClick={handleDownloadTemplate}>
+                                    <Download className="h-3.5 w-3.5 mr-1" />
+                                    Download Template
+                                </Button>
+                            </div>
+
+                            {preview.length > 0 ? (
+                                <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50">
+                                                <TableHead className="text-[10px] uppercase font-bold py-2">First Name</TableHead>
+                                                <TableHead className="text-[10px] uppercase font-bold py-2">Email</TableHead>
+                                                <TableHead className="text-[10px] uppercase font-bold py-2">Company</TableHead>
+                                                <TableHead className="text-[10px] uppercase font-bold py-2">Status</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {preview.map((row, i) => (
+                                                <TableRow key={i}>
+                                                    <TableCell className="text-xs py-2">{row.first_name}</TableCell>
+                                                    <TableCell className="text-xs py-2">{row.email}</TableCell>
+                                                    <TableCell className="text-xs py-2">{row.company}</TableCell>
+                                                    <TableCell className="text-xs py-2">{row.status}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            ) : (
+                                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-semibold">
+                                        <AlertCircle className="h-4 w-4 text-primary" />
+                                        Requirements
+                                    </div>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Your CSV must contain the following required header: <code className="bg-muted px-1 rounded font-mono">first_name</code>.
+                                        Optional headers include: last_name, email, phone, company, status, lead_score.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="p-6 pt-2 border-t mt-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isImporting}>
                         Cancel
                     </Button>

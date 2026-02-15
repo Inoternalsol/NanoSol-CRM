@@ -259,6 +259,25 @@ export function useDeleteContact() {
             if (error) {
                 throw new Error(error.message || error.details || JSON.stringify(error));
             }
+        },
+        {
+            revalidate: true,
+        }
+    );
+}
+
+export function useBulkDeleteContacts() {
+    return useSWRMutation(
+        "contacts",
+        async (_, { arg }: { arg: string[] }) => {
+            if (arg.length === 0) return;
+            const { error } = await supabase.from("contacts").delete().in("id", arg);
+            if (error) {
+                throw new Error(error.message || error.details || JSON.stringify(error));
+            }
+        },
+        {
+            revalidate: true,
         }
     );
 }

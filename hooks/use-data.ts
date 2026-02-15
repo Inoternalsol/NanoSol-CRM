@@ -23,6 +23,7 @@ export {
     useCreateContact,
     useUpdateContact,
     useDeleteContact,
+    useBulkDeleteContacts,
     useContactByPhone,
     useBulkCreateContacts,
     useCreateContactStatus,
