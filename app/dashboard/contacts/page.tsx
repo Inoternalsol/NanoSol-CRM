@@ -548,6 +548,7 @@ export default function ContactsPage() {
                                         </TableHead>
                                         <TableHead>Contact</TableHead>
                                         <TableHead>Last Call</TableHead>
+                                        <TableHead>Call Status</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Score</TableHead>
                                         <TableHead>Owner</TableHead>
@@ -591,22 +592,32 @@ export default function ContactsPage() {
                                             </TableCell>
                                             <TableCell onClick={() => handleEdit(contact)}>
                                                 {contact.last_call_at ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={cn(
-                                                                "w-fit capitalize",
-                                                                contact.last_call_status === "completed" && "text-green-600 border-green-200 bg-green-50",
-                                                                contact.last_call_status === "missed" && "text-red-600 border-red-200 bg-red-50",
-                                                                contact.last_call_status === "no_answer" && "text-orange-600 border-orange-200 bg-orange-50",
-                                                            )}
-                                                        >
-                                                            {contact.last_call_status?.replace('_', ' ') || "Called"}
-                                                        </Badge>
-                                                        <span className="text-[10px] text-muted-foreground">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-medium">
                                                             {new Date(contact.last_call_at).toLocaleDateString()}
                                                         </span>
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                            {new Date(contact.last_call_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
                                                     </div>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell onClick={() => handleEdit(contact)}>
+                                                {contact.last_call_status ? (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "w-fit capitalize text-[10px] h-5 px-2",
+                                                            contact.last_call_status === "completed" && "text-green-600 border-green-200 bg-green-50",
+                                                            (contact.last_call_status === "missed" || contact.last_call_status === "failed") && "text-red-600 border-red-200 bg-red-50",
+                                                            (contact.last_call_status === "no_answer" || contact.last_call_status === "busy") && "text-orange-600 border-orange-200 bg-orange-50",
+                                                            contact.last_call_status === "ringback" && "text-blue-600 border-blue-200 bg-blue-50",
+                                                        )}
+                                                    >
+                                                        {contact.last_call_status?.replace('_', ' ')}
+                                                    </Badge>
                                                 ) : (
                                                     <span className="text-xs text-muted-foreground">-</span>
                                                 )}

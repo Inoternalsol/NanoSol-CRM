@@ -17,7 +17,7 @@ export function useActiveProfile() {
         if (!user) return null;
         const { data, error } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
         if (error) {
-            console.error("Error fetching active profile:", error);
+            console.warn(`[Profile] Error fetching profile for user ${user.id}:`, error.message);
             return null;
         }
         return data;

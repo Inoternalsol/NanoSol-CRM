@@ -170,7 +170,25 @@ export class SipService {
                     useDialerStore.getState().endCall();
                     return;
                 }
-                window.dispatchEvent(new CustomEvent("sip:call:failed", { detail: e }));
+
+                // Map JsSIP causes to standard statuses
+                let status: "failed" | "busy" | "rejected" | "no-answer" = "failed";
+                const cause = e.cause;
+
+                if (cause === JsSIP.C.causes.BUSY) status = "busy";
+                else if (cause === JsSIP.C.causes.REJECTED || cause === JsSIP.C.causes.FORBIDDEN) status = "rejected";
+                else if (cause === JsSIP.C.causes.NO_ANSWER || cause === JsSIP.C.causes.REQUEST_TIMEOUT) status = "no-answer";
+
+                console.log(`[SIP] Call failed: ${cause} -> mapping to ${status}`);
+
+                window.dispatchEvent(new CustomEvent("sip:call:failed", { detail: { ...e, mappedStatus: status } }));
+
+                // Update queue if auto-dialer is active
+                const store = useDialerStore.getState();
+                if (store.autoDialerActive && store.currentNumber) {
+                    store.updateQueueStatus(store.currentNumber, status as any);
+                }
+
                 useDialerStore.getState().endCall();
             },
             ended: () => {

@@ -30,6 +30,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useCreateCallLog } from "@/hooks/use-calls";
+import { useUpdateContact } from "@/hooks/use-contacts";
 
 // Sub-components
 import { DialerPad } from "./dialer/dialer-pad";
@@ -42,6 +44,9 @@ const StatusBadge = ({ sipStatus }: { sipStatus: string }) => {
         connecting: { color: "bg-yellow-500 animate-pulse", label: "Connecting" },
         disconnected: { color: "bg-red-500", label: "Offline" },
         error: { color: "bg-red-600", label: "Error" },
+        busy: { color: "bg-orange-500", label: "Busy" },
+        failed: { color: "bg-red-600", label: "Failed" },
+        ringback: { color: "bg-blue-400 animate-pulse", label: "Ringing" },
     };
     const s = statusMap[sipStatus] || statusMap.disconnected;
     return (
@@ -63,6 +68,8 @@ export function CallWidget() {
         openDialer,
         setCurrentNumber,
         startCall,
+        callStartedAt,
+        autoDialerQueue,
         autoDialerActive,
         isAutoDialerPaused,
         toggleAutoDialerPause,
@@ -71,7 +78,6 @@ export function CallWidget() {
         nextAutoDialNumber,
         updateQueueStatus,
         stopAutoDialer,
-        autoDialerQueue,
         selectedSipAccountId,
         setSelectedSipAccountId,
         callHistory,
@@ -143,7 +149,7 @@ export function CallWidget() {
     useEffect(() => {
         const interval = setInterval(() => {
             const sip = SipService.getInstance();
-            setSipStatus(sip.isRegistered ? "connected" : sip.isConnected ? "connecting" : "disconnected");
+            setSipStatus(sip.isRegistered() ? "connected" : sip.isConnected() ? "connecting" : "disconnected");
         }, 2000);
         return () => clearInterval(interval);
     }, []);
@@ -190,6 +196,9 @@ export function CallWidget() {
         return () => clearInterval(interval);
     }, [isInCall, callDuration]);
 
+    const { trigger: createCallLog } = useCreateCallLog();
+    const { trigger: updateContact } = useUpdateContact();
+
     const handleCall = useCallback((numberOverride?: string) => {
         const target = numberOverride || currentNumber;
         if (target) {
@@ -199,13 +208,58 @@ export function CallWidget() {
         }
     }, [currentNumber, startCall, setCurrentNumber, selectedSipAccountId]);
 
-    const handleHangup = () => {
-        // If in auto-dial mode, mark current as answered before hangup
-        if (autoDialerActive && currentNumber) {
-            updateQueueStatus(currentNumber, "answered");
+    const handleHangup = useCallback(async (status: "answered" | "no-answer" | "busy" | "failed" | "skipped" | "forward" | "ringback" = "answered") => {
+        const id = selectedSipAccountId || undefined;
+        SipService.getInstance().hangup(id);
+
+        if (currentNumber) {
+            // Persist to database
+            if (contact?.id && profile) {
+                // Update contact status if appropriate
+                updateContact({
+                    id: contact.id,
+                    updates: {
+                        status: status === "answered" ? "contacted" : contact.status,
+                        last_call_at: new Date().toISOString(),
+                        last_call_status: status
+                    }
+                });
+
+                // Create call log - map status to CallLog enum
+                let logStatus: "completed" | "missed" | "failed" | "no_answer" | "busy" = "failed";
+                if (status === "answered") logStatus = "completed";
+                else if (status === "no-answer") logStatus = "no_answer";
+                else if (status === "busy") logStatus = "busy";
+
+                createCallLog({
+                    contact_id: contact.id,
+                    user_id: profile.id,
+                    organization_id: profile.organization_id,
+                    phone_number: currentNumber,
+                    direction: "outbound",
+                    status: logStatus,
+                    duration_seconds: callDuration,
+                    started_at: callStartedAt || new Date().toISOString(),
+                });
+            }
+
+            // Update auto-dialer queue
+            if (autoDialerActive) {
+                updateQueueStatus(currentNumber, status);
+            }
         }
-        SipService.getInstance().hangup(selectedSipAccountId || undefined);
-    };
+    }, [currentNumber, contact, profile, callDuration, callStartedAt, autoDialerActive, selectedSipAccountId, updateContact, createCallLog, updateQueueStatus]);
+
+    // Handle SIP failures
+    useEffect(() => {
+        const handleFailure = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            const mappedStatus = customEvent.detail?.mappedStatus || "failed";
+            handleHangup(mappedStatus);
+        };
+        window.addEventListener("sip:call:failed", handleFailure);
+        return () => window.removeEventListener("sip:call:failed", handleFailure);
+    }, [handleHangup]);
 
     const handleQuickDial = (phone: string) => {
         setCurrentNumber(phone);

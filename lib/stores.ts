@@ -38,7 +38,7 @@ export interface CallHistoryItem {
     name?: string;
     time: Date;
     duration: number;
-    status: "answered" | "missed" | "rejected" | "failed";
+    status: "answered" | "missed" | "rejected" | "failed" | "busy" | "forward" | "ringback";
     direction: "outgoing" | "incoming";
 }
 
@@ -64,7 +64,7 @@ interface DialerState {
     startCallTimer: () => void;
     stopCallTimer: () => void;
     setAutoDialerQueue: (queue: { number: string; name: string }[]) => void;
-    updateQueueStatus: (number: string, status: "answered" | "no-answer" | "dnd" | "failed" | "skipped") => void;
+    updateQueueStatus: (number: string, status: "answered" | "no-answer" | "busy" | "failed" | "skipped" | "forward" | "ringback") => void;
     startAutoDialer: () => void;
     stopAutoDialer: () => void;
     nextAutoDialNumber: () => { number: string; name: string } | undefined;
