@@ -6,13 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { useRealtime } from "./use-realtime";
 import type { CalendarEvent } from "@/types";
 
-const supabase = createClient();
+// const supabase = createClient(); // Moved inside functions for SSR safety
 
 // ============================================
 // FETCHERS
 // ============================================
 
 async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("calendar_events")
         .select("*")
@@ -43,6 +44,7 @@ export function useCreateCalendarEvent() {
     return useSWRMutation(
         "calendar-events",
         async (_, { arg }: { arg: Omit<CalendarEvent, "id" | "created_at" | "updated_at"> }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("calendar_events")
                 .insert([arg])

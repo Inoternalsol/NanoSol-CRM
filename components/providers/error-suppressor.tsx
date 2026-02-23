@@ -39,13 +39,26 @@ export function ErrorSuppressor() {
         ];
 
         const originalFetch = window.fetch;
-        window.fetch = function (...args: Parameters<typeof fetch>) {
+        window.fetch = async function (...args: Parameters<typeof fetch>) {
             const [input] = args;
             const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : '');
+
             if (maliciousDomains.some(domain => url.includes(domain))) {
-                return Promise.resolve(new Response(null, { status: 200 }));
+                console.warn(`[Blocked] Prevented fetch to malicious domain: ${url}`);
+                return new Response(null, { status: 200 });
             }
-            return originalFetch.apply(this, args);
+
+            try {
+                return await originalFetch.apply(this, args);
+            } catch (err: any) {
+                if (err?.message === "Failed to fetch" || err?.name === "TypeError") {
+                    console.error(`[Fetch Failure] Failed to reach: ${url}`, {
+                        args,
+                        error: err
+                    });
+                }
+                throw err;
+            }
         };
 
         const handler = (event: PromiseRejectionEvent) => {

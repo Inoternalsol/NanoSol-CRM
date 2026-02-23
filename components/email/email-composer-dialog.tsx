@@ -3,7 +3,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { cn } from "@/lib/utils";
 import {
     Dialog,
     DialogContent,
@@ -33,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useEmailTemplates, useActiveProfile, useSMTPConfigs } from "@/hooks/use-data";
 import { toast } from "sonner";
-import { Loader2, Send, Sparkles, Code2, AlertCircle } from "lucide-react";
+import { Loader2, Send, Sparkles, Code2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
     Tabs,
@@ -64,7 +63,7 @@ export function EmailComposerDialog({
     const [isSending, setIsSending] = useState(false);
     const { data: templates } = useEmailTemplates();
     const { data: profile } = useActiveProfile();
-    const { data: accounts } = useSMTPConfigs(profile?.organization_id || null);
+    const { data: accounts } = useSMTPConfigs();
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),

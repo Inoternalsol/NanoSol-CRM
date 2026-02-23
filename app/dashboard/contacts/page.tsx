@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -35,6 +37,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContactListSkeleton } from "@/components/ui/skeleton-loaders";
 import { ContactsEmptyState } from "@/components/ui/empty-state";
@@ -47,7 +59,6 @@ import { ContactFilters, type ContactFilterValues } from "@/components/contacts/
 import { ImportDialog } from "@/components/contacts/import-dialog";
 import { StatusManagementDialog } from "@/components/contacts/status-management-dialog";
 import type { Contact } from "@/types";
-import { SipService } from "@/lib/services/sip-service";
 import { useDialerStore } from "@/lib/stores";
 import { UserCheck, Play } from "lucide-react";
 import { PaginationControls } from "@/components/ui/pagination-controls"; // Helper
@@ -74,6 +85,10 @@ export default function ContactsPage() {
     const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
     const [composerOpen, setComposerOpen] = useState(false);
     const [composerContact, setComposerContact] = useState<{ email: string, name?: string } | null>(null);
+
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [idsToDelete, setIdsToDelete] = useState<string[]>([]);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [filters, setFilters] = useState<ContactFilterValues>({
         search: "",
         company: "",
@@ -135,28 +150,33 @@ export default function ContactsPage() {
         setDialogOpen(true);
     };
 
-    const handleDelete = async (id: string | string[]) => {
-        const count = Array.isArray(id) ? id.length : 1;
-        const confirmMessage = count > 1
-            ? `Are you sure you want to delete ${count} contacts?`
-            : "Are you sure you want to delete this contact?";
+    const handleDelete = (id: string | string[]) => {
+        const ids = Array.isArray(id) ? id : [id];
+        setIdsToDelete(ids);
+        setDeleteDialogOpen(true);
+    };
 
-        if (!confirm(confirmMessage)) return;
-
+    const handleConfirmDelete = async () => {
+        setIsDeleting(true);
+        const count = idsToDelete.length;
         try {
-            if (Array.isArray(id)) {
-                await bulkDeleteContacts(id);
+            if (count > 1) {
+                await bulkDeleteContacts(idsToDelete);
             } else {
-                await deleteContact(id);
+                await deleteContact(idsToDelete[0]);
             }
             toast.success(count > 1 ? `${count} contacts deleted` : "Contact deleted");
-            if (Array.isArray(id)) setSelectedContacts([]);
+            setSelectedContacts(prev => prev.filter(id => !idsToDelete.includes(id)));
             mutate();
         } catch (error) {
             const message = error instanceof Error ? error.message : "Unknown error occurred";
             toast.error(count > 1 ? "Failed to delete contacts" : "Failed to delete contact", {
                 description: message
             });
+        } finally {
+            setIsDeleting(false);
+            setDeleteDialogOpen(false);
+            setIdsToDelete([]);
         }
     };
 
@@ -165,13 +185,14 @@ export default function ContactsPage() {
         setEditingContact(null);
     };
 
-    const handleCall = (phone: string | null) => {
+    const handleCallContact = async (phone: string | null) => {
         if (!phone) {
             toast.error("Contact has no phone number");
             return;
         }
         setCurrentNumber(phone);
         openDialer();
+        const { SipService } = await import("@/lib/services/sip-service");
         SipService.getInstance().call(phone);
         startCall();
     };
@@ -282,6 +303,7 @@ export default function ContactsPage() {
     };
 
     const handleBulkDelete = async () => {
+        console.log("[DELETE] handleBulkDelete triggered. Selected:", selectedContacts.length);
         if (selectedContacts.length === 0) return;
 
         if (isSelectAllMatching) {
@@ -657,7 +679,7 @@ export default function ContactsPage() {
                                                         size="icon"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleCall(contact.phone || null);
+                                                            handleCallContact(contact.phone || null);
                                                         }}
                                                     >
                                                         <Phone className="h-4 w-4" />
@@ -751,6 +773,31 @@ export default function ContactsPage() {
                 defaultTo={composerContact?.email}
                 organizationId={activeProfile?.organization_id || ""}
             />
-        </motion.div>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete {idsToDelete.length === 1 ? "this contact" : `${idsToDelete.length} contacts`} and remove their data from our servers.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleConfirmDelete();
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? "Deleting..." : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </motion.div >
     );
 }

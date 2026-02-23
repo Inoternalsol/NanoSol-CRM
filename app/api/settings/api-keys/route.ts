@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 
+export const dynamic = 'force-dynamic';
+
 const CREATE_KEY_SCHEMA = z.object({
     label: z.string().min(1),
     scopes: z.array(z.string()).default(["contacts:read", "contacts:write"]),
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
 
     } catch (error) {
         if (error instanceof z.ZodError) {
-            return NextResponse.json({ error: error.errors }, { status: 400 });
+            return NextResponse.json({ error: (error as any).errors }, { status: 400 });
         }
         return NextResponse.json({ error: "Internal Error" }, { status: 500 });
     }

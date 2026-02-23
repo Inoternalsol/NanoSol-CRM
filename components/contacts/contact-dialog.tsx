@@ -20,9 +20,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useCreateContact, useUpdateContact, useContactStatuses } from "@/hooks/use-data";
 import type { Contact } from "@/types";
+import { CallHistory } from "@/components/dashboard/dialer/call-history";
+import { useDialerStore } from "@/lib/stores";
 
 interface ContactFormData {
     first_name: string;
@@ -54,6 +62,19 @@ export function ContactDialog({
     const { trigger: createContact, isMutating: isCreating } = useCreateContact();
     const { trigger: updateContact, isMutating: isUpdating } = useUpdateContact();
     const { data: statuses } = useContactStatuses();
+
+    // Dialer hooks for the activity tab
+    const { setCurrentNumber, openDialer, startCall } = useDialerStore();
+
+    const handleDial = async (number: string) => {
+        setCurrentNumber(number);
+        openDialer();
+        const { SipService } = await import("@/lib/services/sip-service");
+        SipService.getInstance().call(number);
+        startCall();
+        // Optional: close the dialog when calling
+        onOpenChange(false);
+    };
 
     const {
         register,
@@ -167,133 +188,157 @@ export function ContactDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="first_name">First Name *</Label>
-                            <Input
-                                id="first_name"
-                                {...register("first_name", { required: "First name is required" })}
-                                placeholder="John"
-                            />
-                            {errors.first_name && (
-                                <p className="text-xs text-destructive">
-                                    {errors.first_name.message}
-                                </p>
+                <Tabs defaultValue="details" className="w-full">
+                    {isEditing && (
+                        <div className="mb-4">
+                            <TabsList className="w-full grid grid-cols-2">
+                                <TabsTrigger value="details">Details</TabsTrigger>
+                                <TabsTrigger value="activity">Activity</TabsTrigger>
+                            </TabsList>
+                        </div>
+                    )}
+
+                    <TabsContent value="details" className="mt-0">
+                        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="first_name">First Name *</Label>
+                                    <Input
+                                        id="first_name"
+                                        {...register("first_name", { required: "First name is required" })}
+                                        placeholder="John"
+                                    />
+                                    {errors.first_name && (
+                                        <p className="text-xs text-destructive">
+                                            {errors.first_name.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="last_name">Last Name</Label>
+                                    <Input
+                                        id="last_name"
+                                        {...register("last_name")}
+                                        placeholder="Smith"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="email">Email</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    {...register("email", {
+                                        pattern: {
+                                            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                            message: "Invalid email address",
+                                        },
+                                    })}
+                                    placeholder="john@company.com"
+                                />
+                                {errors.email && (
+                                    <p className="text-xs text-destructive">{errors.email.message}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="phone">Phone</Label>
+                                <Input
+                                    id="phone"
+                                    {...register("phone")}
+                                    placeholder="+1 (555) 123-4567"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="company">Company</Label>
+                                    <Input
+                                        id="company"
+                                        {...register("company")}
+                                        placeholder="Acme Inc"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="job_title">Job Title</Label>
+                                    <Input
+                                        id="job_title"
+                                        {...register("job_title")}
+                                        placeholder="CEO"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="status">Status</Label>
+                                    <Select
+                                        value={watchedStatus}
+                                        onValueChange={(value) => setValue("status", value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {statuses?.map((s) => (
+                                                <SelectItem key={s.id} value={s.name}>
+                                                    {s.label}
+                                                </SelectItem>
+                                            ))}
+                                            {(!statuses || statuses.length === 0) && (
+                                                <>
+                                                    <SelectItem value="new">New</SelectItem>
+                                                    <SelectItem value="contacted">Contacted</SelectItem>
+                                                    <SelectItem value="qualified">Qualified</SelectItem>
+                                                    <SelectItem value="unqualified">Unqualified</SelectItem>
+                                                    <SelectItem value="customer">Customer</SelectItem>
+                                                </>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="lead_score">Lead Score</Label>
+                                    <Input
+                                        id="lead_score"
+                                        type="number"
+                                        {...register("lead_score")}
+                                        placeholder="0"
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onOpenChange(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={isCreating || isUpdating}>
+                                    {isCreating || isUpdating
+                                        ? "Saving..."
+                                        : isEditing
+                                            ? "Update Contact"
+                                            : "Create Contact"}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </TabsContent>
+
+                    <TabsContent value="activity" className="mt-0 outline-none">
+                        <div className="h-[432px] md:h-[500px] overflow-y-auto pr-2 -mr-2">
+                            {contact && (
+                                <CallHistory
+                                    contactId={contact.id}
+                                    onDial={handleDial}
+                                />
                             )}
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="last_name">Last Name</Label>
-                            <Input
-                                id="last_name"
-                                {...register("last_name")}
-                                placeholder="Smith"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            {...register("email", {
-                                pattern: {
-                                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                    message: "Invalid email address",
-                                },
-                            })}
-                            placeholder="john@company.com"
-                        />
-                        {errors.email && (
-                            <p className="text-xs text-destructive">{errors.email.message}</p>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input
-                            id="phone"
-                            {...register("phone")}
-                            placeholder="+1 (555) 123-4567"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="company">Company</Label>
-                            <Input
-                                id="company"
-                                {...register("company")}
-                                placeholder="Acme Inc"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="job_title">Job Title</Label>
-                            <Input
-                                id="job_title"
-                                {...register("job_title")}
-                                placeholder="CEO"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="status">Status</Label>
-                            <Select
-                                value={watchedStatus}
-                                onValueChange={(value) => setValue("status", value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {statuses?.map((s) => (
-                                        <SelectItem key={s.id} value={s.name}>
-                                            {s.label}
-                                        </SelectItem>
-                                    ))}
-                                    {(!statuses || statuses.length === 0) && (
-                                        <>
-                                            <SelectItem value="new">New</SelectItem>
-                                            <SelectItem value="contacted">Contacted</SelectItem>
-                                            <SelectItem value="qualified">Qualified</SelectItem>
-                                            <SelectItem value="unqualified">Unqualified</SelectItem>
-                                            <SelectItem value="customer">Customer</SelectItem>
-                                        </>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="lead_score">Lead Score</Label>
-                            <Input
-                                id="lead_score"
-                                type="number"
-                                {...register("lead_score")}
-                                placeholder="0"
-                            />
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={isCreating || isUpdating}>
-                            {isCreating || isUpdating
-                                ? "Saving..."
-                                : isEditing
-                                    ? "Update Contact"
-                                    : "Create Contact"}
-                        </Button>
-                    </DialogFooter>
-                </form>
+                    </TabsContent>
+                </Tabs>
             </DialogContent>
         </Dialog>
     );

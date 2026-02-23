@@ -2,11 +2,13 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Play, Pause, Volume2, VolumeX, Hash, PhoneForwarded, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Play, Pause, Volume2, VolumeX, Hash, PhoneForwarded, PhoneOff, FileAudio } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useWaveform } from "@/hooks/use-waveform";
-import { SipService } from "@/lib/services/sip-service";
+import { VoicemailUpload } from "./voicemail-upload";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface Contact {
     first_name: string;
@@ -43,8 +45,34 @@ export const ActiveCall = ({
     onKeypadToggle,
     onHangup
 }: ActiveCallProps) => {
-    const stream = SipService.getInstance().remoteStream;
+    const [stream, setStream] = React.useState<MediaStream | null>(null);
+    React.useEffect(() => {
+        const getStream = async () => {
+            const { SipService } = await import("@/lib/services/sip-service");
+            setStream(SipService.getInstance().remoteStream);
+        };
+        getStream();
+    }, []);
     const volumes = useWaveform(stream, status === "active", 20);
+    const [voicemailFile, setVoicemailFile] = useState<File | null>(null);
+    const [isDropping, setIsDropping] = useState(false);
+
+    const handleVoicemailDrop = async () => {
+        if (!voicemailFile) {
+            toast.error("Please upload a voicemail file first");
+            return;
+        }
+
+        try {
+            setIsDropping(true);
+            toast.success("Dropping voicemail...");
+            const { SipService } = await import("@/lib/services/sip-service");
+            await SipService.getInstance().injectVoicemail(voicemailFile);
+        } catch (error) {
+            console.error("Voicemail drop failed", error);
+            setIsDropping(false);
+        }
+    };
 
     return (
         <div className="space-y-6 flex flex-col items-center py-4">
@@ -111,7 +139,31 @@ export const ActiveCall = ({
                 />
             </div>
 
-            <div className="pt-6 w-full px-6">
+            <div className="pt-2 w-full px-6 flex flex-col items-center">
+                <VoicemailUpload file={voicemailFile} onUpload={setVoicemailFile} />
+
+                <AnimatePresence>
+                    {voicemailFile && status === "active" && !isDropping && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="w-full mb-4"
+                        >
+                            <Button
+                                variant="secondary"
+                                className="w-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border border-blue-500/20 shadow-sm"
+                                onClick={handleVoicemailDrop}
+                            >
+                                <FileAudio className="mr-2 h-4 w-4" />
+                                Drop Voicemail
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            <div className="pt-2 w-full px-6">
                 <Button
                     variant="destructive"
                     className="w-full h-14 rounded-2xl shadow-lg shadow-red-500/20 text-lg font-semibold hover:scale-[1.02] transition-transform"

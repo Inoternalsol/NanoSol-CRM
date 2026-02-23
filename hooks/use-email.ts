@@ -7,13 +7,14 @@ import { createClient } from "@/lib/supabase/client";
 import { useRealtime } from "./use-realtime";
 import type { EmailTemplate, EmailSequence, SequenceEnrollment, SMTPConfig } from "@/types";
 
-const supabase = createClient();
+// const supabase = createClient(); // Moved inside functions for SSR safety
 
 // ============================================
 // FETCHERS
 // ============================================
 
 async function fetchEmailTemplates(): Promise<EmailTemplate[]> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("email_templates")
         .select("*")
@@ -23,6 +24,7 @@ async function fetchEmailTemplates(): Promise<EmailTemplate[]> {
 }
 
 async function fetchEmailSequences(): Promise<EmailSequence[]> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("email_sequences")
         .select("*")
@@ -32,6 +34,7 @@ async function fetchEmailSequences(): Promise<EmailSequence[]> {
 }
 
 async function fetchSMTPConfigs(): Promise<SMTPConfig[]> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("smtp_configs")
         .select("*")
@@ -133,6 +136,7 @@ export function useCreateEmailSequence() {
     return useSWRMutation(
         "email-sequences",
         async (_, { arg }: { arg: Omit<EmailSequence, "id" | "created_at" | "updated_at"> }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("email_sequences")
                 .insert([arg])
@@ -151,6 +155,7 @@ export function useUpdateEmailSequence() {
     return useSWRMutation(
         "email-sequences",
         async (_, { arg }: { arg: { id: string; updates: Partial<EmailSequence> } }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("email_sequences")
                 .update(arg.updates)
@@ -170,6 +175,7 @@ export function useDeleteEmailSequence() {
     return useSWRMutation(
         "email-sequences",
         async (_, { arg }: { arg: string }) => {
+            const supabase = createClient();
             const { error } = await supabase
                 .from("email_sequences")
                 .delete()
@@ -187,6 +193,7 @@ export function useCreateEmailTemplate() {
     return useSWRMutation(
         "email-templates",
         async (_, { arg }: { arg: Omit<EmailTemplate, "id" | "created_at" | "updated_at"> }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("email_templates")
                 .insert([arg])
@@ -205,6 +212,7 @@ export function useUpdateEmailTemplate() {
     return useSWRMutation(
         "email-templates",
         async (_, { arg }: { arg: { id: string; updates: Partial<EmailTemplate> } }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("email_templates")
                 .update(arg.updates)
@@ -224,6 +232,7 @@ export function useDeleteEmailTemplate() {
     return useSWRMutation(
         "email-templates",
         async (_, { arg }: { arg: string }) => {
+            const supabase = createClient();
             const { error } = await supabase
                 .from("email_templates")
                 .delete()
@@ -239,6 +248,7 @@ export function useDeleteEmailTemplate() {
 
 export function useSequenceEnrollments(sequenceId: string) {
     const swr = useSWR<SequenceEnrollment[]>(sequenceId ? `sequence-enrollments-${sequenceId}` : null, async () => {
+        const supabase = createClient();
         const { data, error } = await supabase
             .from("sequence_enrollments")
             .select("*, contact:contacts(id, first_name, last_name, email)")
@@ -260,6 +270,7 @@ export function useEnrollInSequence() {
     return useSWRMutation(
         "sequence-enrollments",
         async (_, { arg }: { arg: { sequence_id: string; contact_ids: string[]; organization_id: string } }) => {
+            const supabase = createClient();
             const enrollments = arg.contact_ids.map(contact_id => ({
                 organization_id: arg.organization_id,
                 sequence_id: arg.sequence_id,
@@ -298,6 +309,7 @@ export function useUpdateEnrollment() {
     return useSWRMutation(
         "sequence-enrollments",
         async (_, { arg }: { arg: { id: string; updates: Partial<SequenceEnrollment>; sequence_id: string } }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("sequence_enrollments")
                 .update(arg.updates)
@@ -324,6 +336,7 @@ export function useDeleteEnrollment() {
     return useSWRMutation(
         "sequence-enrollments",
         async (_, { arg }: { arg: { id: string; sequence_id: string } }) => {
+            const supabase = createClient();
             const { error } = await supabase
                 .from("sequence_enrollments")
                 .delete()

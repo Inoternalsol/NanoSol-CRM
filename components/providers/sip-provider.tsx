@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { SipService } from "@/lib/services/sip-service";
 import { createClient } from "@/lib/supabase/client";
 import { useDialerStore } from "@/lib/stores";
 
 export function SipProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const initSip = async () => {
+            const { SipService } = await import("@/lib/services/sip-service");
             const sipService = SipService.getInstance();
 
             // Don't reinitialize if already connected and registered
@@ -58,7 +58,13 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (sipProfiles && sipProfiles.length > 0) {
+                console.log(`[SIP] Found ${sipProfiles.length} active profiles:`, sipProfiles);
                 sipProfiles.forEach(sipProfile => {
+                    console.log(`[SIP] Raw DB Profile for ${sipProfile.sip_username}:`, {
+                        websocket_server: sipProfile.websocket_server,
+                        outbound_proxy: sipProfile.outbound_proxy,
+                        registrar_server: sipProfile.registrar_server
+                    });
                     let wsUrl;
 
                     if (sipProfile.websocket_server) {
@@ -92,13 +98,23 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                         wsUrl = `wss://${sipProfile.sip_domain}:7443`;
                     }
 
+                    console.log(`[SIP] Derived wsUrl for ${sipProfile.name}: ${wsUrl}`);
                     console.log(`[SIP] Connecting account ${sipProfile.name} to ${wsUrl} as ${sipProfile.sip_username}@${sipProfile.sip_domain}`);
+
+                    console.log(`[SIP] Password field present:`, !!sipProfile.sip_password_encrypted, `Length:`, sipProfile.sip_password_encrypted?.length || 0);
 
                     sipService.connect({
                         uri: `sip:${sipProfile.sip_username}@${sipProfile.sip_domain}`,
                         password: sipProfile.sip_password_encrypted || "",
+                        auth_user: sipProfile.sip_auth_user || undefined,
+                        protocol: sipProfile.sip_protocol || "wss",
                         ws_servers: wsUrl,
                         display_name: sipProfile.display_name || sipProfile.sip_username,
+                        outbound_proxy: sipProfile.outbound_proxy || undefined,
+                        registrar_server: sipProfile.registrar_server || undefined,
+                        sip_domain: sipProfile.sip_domain,
+                        janus_url: sipProfile.janus_url || undefined,
+                        janus_secret: sipProfile.janus_secret || undefined,
                     }, sipProfile.id);
 
                     // If this is the default account, set it in the store
@@ -133,8 +149,6 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
         return () => {
             clearTimeout(timer);
-            // Don't disconnect on cleanup in development to prevent hot reload issues
-            // SipService.getInstance().disconnect();
         };
     }, []);
 

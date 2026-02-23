@@ -12,14 +12,14 @@ import {
     Square,
     Clock,
     History as HistoryIcon,
-    LayoutGrid
+    LayoutGrid,
+    Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useDialerStore } from "@/lib/stores";
-import { SipService } from "@/lib/services/sip-service";
 import { useContactsPaginated, useContactByPhone } from "@/hooks/use-data";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useSipAccounts, useActiveProfile } from "@/hooks/use-settings";
@@ -37,6 +37,13 @@ import { useUpdateContact } from "@/hooks/use-contacts";
 import { DialerPad } from "./dialer/dialer-pad";
 import { ActiveCall } from "./dialer/active-call";
 import { CallHistory } from "./dialer/call-history";
+import { IncomingCallModal } from "./dialer/incoming-call-modal";
+import { AudioDeviceSettings } from "./dialer/audio-settings";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
 const StatusBadge = ({ sipStatus }: { sipStatus: string }) => {
     const statusMap: Record<string, { color: string; label: string }> = {
@@ -80,9 +87,6 @@ export function CallWidget() {
         stopAutoDialer,
         selectedSipAccountId,
         setSelectedSipAccountId,
-        callHistory,
-        addCallToHistory,
-        clearCallHistory,
     } = useDialerStore();
 
     const { data: profile } = useActiveProfile();
@@ -113,21 +117,35 @@ export function CallWidget() {
             return;
         }
 
+        let countdown = 3;
+        setAutoDialCountdown(countdown);
+
+        const intervalId = setInterval(() => {
+            countdown -= 1;
+            setAutoDialCountdown(countdown);
+        }, 1000);
+
         // Add a small delay before dialing next number (gives user a moment)
-        autoDialTimeoutRef.current = setTimeout(() => {
+        autoDialTimeoutRef.current = setTimeout(async () => {
+            clearInterval(intervalId);
+            setAutoDialCountdown(null);
+
             const nextItem = nextAutoDialNumber();
             if (nextItem) {
                 // Trigger the call
                 setCurrentNumber(nextItem.number);
                 startCall();
+                const { SipService } = await import("@/lib/services/sip-service");
                 SipService.getInstance().call(nextItem.number);
             }
-        }, 1500); // 1.5 second delay between calls
+        }, 3000); // 3 second delay between calls to let the agent breathe
 
         return () => {
+            clearInterval(intervalId);
             if (autoDialTimeoutRef.current) {
                 clearTimeout(autoDialTimeoutRef.current);
             }
+            setAutoDialCountdown(null);
         };
     }, [autoDialerActive, isAutoDialerPaused, isInCall, autoDialerQueue, nextAutoDialNumber, setCurrentNumber, startCall, stopAutoDialer]);
 
@@ -136,9 +154,9 @@ export function CallWidget() {
     const [isSpeakerOn, setIsSpeakerOn] = useState(true);
     const [isOnHold, setIsOnHold] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
-    const [durationDisplay, setDurationDisplay] = useState("00:00");
     const [showKeypad, setShowKeypad] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [autoDialCountdown, setAutoDialCountdown] = useState<number | null>(null);
     const [sipStatus, setSipStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
     const ringtoneRef = useRef<HTMLAudioElement | null>(null);
     const prevCallStatusRef = useRef(callStatus);
@@ -147,7 +165,8 @@ export function CallWidget() {
     const { data: searchResults } = useContactsPaginated({ search: debouncedSearch, limit: 5 });
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const interval = setInterval(async () => {
+            const { SipService } = await import("@/lib/services/sip-service");
             const sip = SipService.getInstance();
             setSipStatus(sip.isRegistered() ? "connected" : sip.isConnected() ? "connecting" : "disconnected");
         }, 2000);
@@ -171,45 +190,35 @@ export function CallWidget() {
 
     // Save call to history when call ends
     useEffect(() => {
-        // Only save when status changes from active/ringing to ended
-        if (prevCallStatusRef.current !== "ended" && callStatus === "ended" && currentNumber) {
-            const callWasActive = prevCallStatusRef.current === "active";
-            addCallToHistory({
-                number: currentNumber,
-                name: contact?.first_name ? `${contact.first_name} ${contact.last_name || ""}`.trim() : undefined,
-                duration: callDuration,
-                status: callWasActive ? "answered" : "missed",
-                direction: "outgoing",
-            });
-        }
+        // We now rely on `createCallLog` in handleHangup to persist calls to Supabase,
+        // so we just track the previous call status here.
         prevCallStatusRef.current = callStatus;
-    }, [callStatus, currentNumber, callDuration, contact, addCallToHistory]);
+    }, [callStatus]);
 
-
-    useEffect(() => {
-        if (!isInCall) return;
-        const interval = setInterval(() => {
-            const mins = Math.floor(callDuration / 60);
-            const secs = callDuration % 60;
-            setDurationDisplay(`${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [isInCall, callDuration]);
+    // Derive duration display from store state
+    const durationDisplay = `${Math.floor(callDuration / 60).toString().padStart(2, "0")}:${(callDuration % 60).toString().padStart(2, "0")}`;
 
     const { trigger: createCallLog } = useCreateCallLog();
     const { trigger: updateContact } = useUpdateContact();
 
-    const handleCall = useCallback((numberOverride?: string) => {
+    const handleCall = useCallback(async (numberOverride?: string) => {
         const target = numberOverride || currentNumber;
         if (target) {
             startCall();
             if (target !== currentNumber) setCurrentNumber(target);
+            const { SipService } = await import("@/lib/services/sip-service");
             SipService.getInstance().call(target, selectedSipAccountId || undefined);
         }
     }, [currentNumber, startCall, setCurrentNumber, selectedSipAccountId]);
 
     const handleHangup = useCallback(async (status: "answered" | "no-answer" | "busy" | "failed" | "skipped" | "forward" | "ringback" = "answered") => {
+        // Safety check: Ensure status is a string (prevents React event objects from leaking into mutations)
+        if (typeof status !== "string") {
+            status = "answered";
+        }
+
         const id = selectedSipAccountId || undefined;
+        const { SipService } = await import("@/lib/services/sip-service");
         SipService.getInstance().hangup(id);
 
         if (currentNumber) {
@@ -283,6 +292,8 @@ export function CallWidget() {
 
     return (
         <>
+            <IncomingCallModal />
+
             <AnimatePresence>
                 <motion.div
                     layoutId="dialer-container"
@@ -338,6 +349,20 @@ export function CallWidget() {
                                             </Button>
                                         </div>
                                     )}
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted/50" title="Settings">
+                                                <Settings className="h-4 w-4" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="end" className="w-[340px] p-4 bg-background/95 backdrop-blur-xl border-white/10 rounded-xl">
+                                            <div className="mb-4">
+                                                <h4 className="font-semibold leading-none mb-1">Audio Settings</h4>
+                                                <p className="text-sm text-muted-foreground">Configure your microphone and speakers.</p>
+                                            </div>
+                                            <AudioDeviceSettings />
+                                        </PopoverContent>
+                                    </Popover>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted/50" onClick={() => setIsMinimized(true)} title="Minimize">
                                         <Minimize2 className="h-4 w-4" />
                                     </Button>
@@ -347,7 +372,22 @@ export function CallWidget() {
                                 </div>
                             </div>
 
-                            {/* Content */}
+                            {/* Auto-Dial Countdown Banner */}
+                            {autoDialCountdown !== null && autoDialCountdown > 0 && (
+                                <AnimatePresence>
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="bg-amber-500/10 text-amber-500 py-2.5 px-4 text-center border-b border-amber-500/20 text-sm font-medium flex items-center justify-center gap-2"
+                                    >
+                                        <Clock className="w-4 h-4 animate-pulse" />
+                                        Starting next call in {autoDialCountdown}s...
+                                    </motion.div>
+                                </AnimatePresence>
+                            )}
+
+                            {/* Main Display Area */}
                             <div className="flex-1 overflow-y-auto px-5 pb-6 scrollbar-hide">
                                 {isInCall ? (
                                     <ActiveCall
@@ -359,9 +399,10 @@ export function CallWidget() {
                                         status={callStatus}
                                         duration={durationDisplay}
                                         isMuted={isMuted}
-                                        onMuteToggle={() => {
+                                        onMuteToggle={async () => {
                                             const n = !isMuted;
                                             setIsMuted(n);
+                                            const { SipService } = await import("@/lib/services/sip-service");
                                             SipService.getInstance().mute(n);
                                         }}
                                         isOnHold={isOnHold}
@@ -370,7 +411,7 @@ export function CallWidget() {
                                         onSpeakerToggle={() => setIsSpeakerOn(!isSpeakerOn)}
                                         showKeypad={showKeypad}
                                         onKeypadToggle={() => setShowKeypad(!showKeypad)}
-                                        onHangup={handleHangup}
+                                        onHangup={() => handleHangup("answered")}
                                     />
                                 ) : (
                                     <Tabs defaultValue="dial" className="w-full mt-4">
@@ -387,8 +428,9 @@ export function CallWidget() {
                                             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 ml-1">Calling From</p>
                                             <Select
                                                 value={selectedSipAccountId || ""}
-                                                onValueChange={(val) => {
+                                                onValueChange={async (val) => {
                                                     setSelectedSipAccountId(val);
+                                                    const { SipService } = await import("@/lib/services/sip-service");
                                                     SipService.getInstance().activeUAId = val;
                                                 }}
                                             >
@@ -401,7 +443,7 @@ export function CallWidget() {
                                                             <div className="flex items-center gap-2">
                                                                 <div className={cn(
                                                                     "h-1.5 w-1.5 rounded-full",
-                                                                    SipService.getInstance().isRegistered(acc.id) ? "bg-green-500" : "bg-muted-foreground/30"
+                                                                    (typeof window !== "undefined" && (window as any).__SIP_SERVICE__)?.isRegistered(acc.id) ? "bg-green-500" : "bg-muted-foreground/30"
                                                                 )} />
                                                                 <span className="text-sm font-medium">{acc.name || acc.sip_username}</span>
                                                             </div>
@@ -447,9 +489,7 @@ export function CallWidget() {
                                         </TabsContent>
                                         <TabsContent value="history" className="mt-0 outline-none">
                                             <CallHistory
-                                                calls={callHistory}
                                                 onDial={handleQuickDial}
-                                                onClear={clearCallHistory}
                                             />
                                         </TabsContent>
                                     </Tabs>

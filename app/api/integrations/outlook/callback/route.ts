@@ -1,7 +1,10 @@
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
+
 import { OutlookCalendarService } from '@/lib/services/outlook-calendar';
 import { encrypt } from '@/lib/crypto';
-import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);

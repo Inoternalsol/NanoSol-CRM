@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { validateApiKey, ApiContext } from "@/lib/api-middleware";
 import { z } from "zod";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
     const validation = await validateApiKey(request);
     if (validation instanceof NextResponse) return validation;
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
 
     } catch (e) {
         if (e instanceof z.ZodError) {
-            return NextResponse.json({ error: e.errors }, { status: 400 });
+            return NextResponse.json({ error: (e as any).errors }, { status: 400 });
         }
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }

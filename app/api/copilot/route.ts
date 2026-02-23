@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 const SYSTEM_PROMPT = `You are an AI copilot for a CRM (Customer Relationship Management) system called NanoSol CRM. 
 You help sales and customer success teams with:
 - Drafting professional emails to contacts

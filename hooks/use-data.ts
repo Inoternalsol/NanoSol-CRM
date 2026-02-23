@@ -18,7 +18,6 @@
 export {
     useContacts,
     useContactsPaginated,
-    useContact,
     useContactStatuses,
     useCreateContact,
     useUpdateContact,
@@ -27,7 +26,6 @@ export {
     useContactByPhone,
     useBulkCreateContacts,
     useCreateContactStatus,
-    useUpdateContactStatus,
     useDeleteContactStatus,
     useContactCount,
 } from "./use-contacts";
@@ -38,17 +36,12 @@ export type { PaginationParams, PaginatedResult } from "./use-contacts";
 // Deals, Tasks, Activities, Pipelines
 export {
     useDeals,
-    useDealsPaginated,
-    useDeal,
     usePipelines,
     useActivities,
     useTasks,
     useCreateDeal,
     useUpdateDeal,
     useDeleteDeal,
-    useCreateTask,
-    useCompleteTask,
-    useCreateActivity,
     useDealStats,
 } from "./use-deals";
 
@@ -73,14 +66,11 @@ export {
     useUpdateEnrollment,
     useDeleteEnrollment,
     useSMTPConfigs,
-    useSaveEmailAccount,
 } from "./use-email";
 
 // Call Logs
 export {
     useCallLogs,
-    useCreateCallLog,
-    useUpdateCallLog,
 } from "./use-calls";
 
 // Settings (Profiles, Org, SIP, SMTP, API Keys)
@@ -88,19 +78,10 @@ export {
     useActiveProfile,
     useProfiles,
     useOrganization,
-    useSipProfile,
-    useSipAccounts,
-    useSaveSipAccount,
-    useDeleteSipAccount,
-    useSetDefaultSipAccount,
-    useSmtpConfig,
-    useApiKeys,
     useUpdateProfile,
     useDeleteProfile,
-    useCreateProfile,
     useUpdateOrganization,
-    useUpdateSipProfile,
-    useUpdateSmtpConfig,
+    useApiKeys,
     useUpdateApiKeys,
     useIntegrations,
     useSyncCalendar,
@@ -108,7 +89,6 @@ export {
 
 // Automation Rules
 export {
-    useAutomationRules,
     useCreateAutomationRule,
     useUpdateAutomationRule,
     useDeleteAutomationRule,

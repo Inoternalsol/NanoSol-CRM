@@ -244,7 +244,7 @@ async function executeEmailAction(templateId: string, contact: Contact, organiza
 
         await transporter.sendMail({
             from: `"${account.name || account.smtp_user}" <${account.email_addr || account.smtp_user}>`,
-            to: contact.email,
+            to: contact.email as string,
             subject: template.subject,
             html: trackedBody,
         });

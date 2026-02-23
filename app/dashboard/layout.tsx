@@ -1,20 +1,20 @@
 "use client";
 
-import { AppProgressBar as ProgressBar } from 'next-nprogress-bar';
-import { PresenceProvider } from "@/components/providers/presence-provider";
-import { OrgBrandingProvider } from "@/components/providers/org-branding-provider";
-import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Suspense } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
-import { MobileSidebar } from "@/components/dashboard/mobile-sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
-import { CommandPalette } from "@/components/dashboard/command-palette";
-import { CallWidget } from "@/components/dashboard/call-widget";
-import { CopilotWidget } from "@/components/copilot/copilot-widget";
-import { SipProvider } from "@/components/providers/sip-provider";
-import { CopilotProvider } from "@/components/copilot/copilot-provider";
 import { useUIStore } from "@/lib/stores";
 import { cn } from "@/lib/utils";
+import { MobileSidebar } from "@/components/dashboard/mobile-sidebar";
+import { CommandPalette } from "@/components/dashboard/command-palette";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { AppProgressBar as ProgressBar } from 'next-nprogress-bar';
+import { CopilotWidget } from "@/components/copilot/copilot-widget";
+import { PresenceProvider } from "@/components/providers/presence-provider";
+import { CopilotProvider } from "@/components/copilot/copilot-provider";
+import { OrgBrandingProvider } from "@/components/providers/org-branding-provider";
+import { CallWidget } from "@/components/dashboard/call-widget";
+import { SipProvider } from "@/components/providers/sip-provider";
 
 export default function DashboardLayout({
     children,
@@ -79,3 +79,6 @@ export default function DashboardLayout({
         </SipProvider>
     );
 }
+
+// Ensure the entire dashboard layout and its children are treated as dynamic to avoid SSR module load issues
+export const dynamic = "force-dynamic";

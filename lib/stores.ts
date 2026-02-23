@@ -33,15 +33,6 @@ export const useUIStore = create<UIState>()(
 );
 
 // ===== Dialer Store (for SIP Widget) =====
-export interface CallHistoryItem {
-    number: string;
-    name?: string;
-    time: Date;
-    duration: number;
-    status: "answered" | "missed" | "rejected" | "failed" | "busy" | "forward" | "ringback";
-    direction: "outgoing" | "incoming";
-}
-
 interface DialerState {
     isOpen: boolean;
     isInCall: boolean;
@@ -50,13 +41,16 @@ interface DialerState {
     callStatus: "idle" | "connecting" | "ringing" | "active" | "ended";
     callStartedAt: string | null;
     callEndedAt: string | null;
+    incomingCall: { callerNumber: string; jsep: unknown; handleId: number; name?: string } | null;
     autoDialerQueue: { number: string; name: string; lastStatus?: string }[];
     autoDialerActive: boolean;
     callTimerInterval: ReturnType<typeof setInterval> | null;
-    callHistory: CallHistoryItem[];
     openDialer: () => void;
     closeDialer: () => void;
     setCurrentNumber: (number: string) => void;
+    setIncomingCall: (call: { callerNumber: string; jsep: unknown; handleId: number; name?: string } | null) => void;
+    answerIncomingCall: () => void;
+    declineIncomingCall: () => void;
     startCall: () => void;
     endCall: () => void;
     setCallStatus: (status: DialerState["callStatus"]) => void;
@@ -64,7 +58,7 @@ interface DialerState {
     startCallTimer: () => void;
     stopCallTimer: () => void;
     setAutoDialerQueue: (queue: { number: string; name: string }[]) => void;
-    updateQueueStatus: (number: string, status: "answered" | "no-answer" | "busy" | "failed" | "skipped" | "forward" | "ringback") => void;
+    updateQueueStatus: (number: string, status: "answered" | "no-answer" | "busy" | "failed" | "skipped" | "forward" | "ringback" | "rejected") => void;
     startAutoDialer: () => void;
     stopAutoDialer: () => void;
     nextAutoDialNumber: () => { number: string; name: string } | undefined;
@@ -74,8 +68,10 @@ interface DialerState {
     skipCurrent: () => void;
     selectedSipAccountId: string | null;
     setSelectedSipAccountId: (id: string | null) => void;
-    addCallToHistory: (call: Omit<CallHistoryItem, "time">) => void;
-    clearCallHistory: () => void;
+    selectedMicrophoneId: string | null;
+    setSelectedMicrophoneId: (id: string | null) => void;
+    selectedSpeakerId: string | null;
+    setSelectedSpeakerId: (id: string | null) => void;
 }
 
 export const useDialerStore = create(
@@ -88,13 +84,22 @@ export const useDialerStore = create(
             callStatus: "idle",
             callStartedAt: null,
             callEndedAt: null,
+            incomingCall: null,
             autoDialerQueue: [],
             autoDialerActive: false,
             callTimerInterval: null,
-            callHistory: [],
             openDialer: () => set({ isOpen: true }),
             closeDialer: () => set({ isOpen: false }),
             setCurrentNumber: (number) => set({ currentNumber: number }),
+            setIncomingCall: (call) => set({ incomingCall: call }),
+            answerIncomingCall: () => {
+                const call = get().incomingCall;
+                if (!call) return;
+                set({ incomingCall: null, isOpen: true, isInCall: true, callStatus: "connecting", currentNumber: call.callerNumber, callDuration: 0 });
+            },
+            declineIncomingCall: () => {
+                set({ incomingCall: null });
+            },
             startCall: () => set({
                 isOpen: true,
                 isInCall: true,
@@ -169,40 +174,13 @@ export const useDialerStore = create(
             },
             selectedSipAccountId: null,
             setSelectedSipAccountId: (id) => set({ selectedSipAccountId: id }),
-            addCallToHistory: (call) => set((state) => ({
-                callHistory: [
-                    { ...call, time: new Date() },
-                    ...state.callHistory
-                ].slice(0, 100) // Keep max 100 calls
-            })),
-            clearCallHistory: () => set({ callHistory: [] }),
+            selectedMicrophoneId: null,
+            setSelectedMicrophoneId: (id) => set({ selectedMicrophoneId: id }),
+            selectedSpeakerId: null,
+            setSelectedSpeakerId: (id) => set({ selectedSpeakerId: id }),
         }),
         {
             name: "nanosol-dialer-storage",
-            storage: {
-                getItem: (name) => {
-                    const str = localStorage.getItem(name);
-                    if (!str) return null;
-                    const { state } = JSON.parse(str);
-                    return {
-                        state: {
-                            ...state,
-                            callHistory: state.callHistory?.map((call: CallHistoryItem) => ({
-                                ...call,
-                                time: new Date(call.time)
-                            })) || []
-                        }
-                    };
-                },
-                setItem: (name, value) => {
-                    localStorage.setItem(name, JSON.stringify({
-                        state: {
-                            callHistory: value.state.callHistory
-                        }
-                    }));
-                },
-                removeItem: (name) => localStorage.removeItem(name),
-            },
         }
     )
 );

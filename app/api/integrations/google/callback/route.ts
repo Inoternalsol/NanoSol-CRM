@@ -3,6 +3,8 @@ import { GoogleCalendarService } from '@/lib/services/google-calendar';
 import { encrypt } from '@/lib/crypto';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');

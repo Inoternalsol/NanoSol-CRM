@@ -69,8 +69,8 @@ export function TaskDialog({
     organizationId,
 }: TaskDialogProps) {
     const isEditing = !!task;
-    const { trigger: createTask, isMutating: isCreating } = useCreateTask();
-    const { trigger: updateTask, isMutating: isUpdating } = useUpdateTask();
+    const { trigger: createTask, isMutating: isCreating } = useCreateTask() as any;
+    const { trigger: updateTask, isMutating: isUpdating } = useUpdateTask() as any;
     const { data: profiles } = useProfiles();
     const { data: contacts } = useContacts();
 

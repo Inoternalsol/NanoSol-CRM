@@ -33,10 +33,13 @@ interface SipFormData {
     name: string;
     display_name: string;
     sip_username: string;
+    sip_auth_user: string;
     sip_password: string;
     sip_domain: string;
     ws_server: string;
+    sip_protocol: string;
     outbound_proxy: string;
+    registrar_server: string;
     is_default: boolean;
 }
 
@@ -56,10 +59,13 @@ export function SipAccountDialog({
             name: "",
             display_name: "",
             sip_username: "",
+            sip_auth_user: "",
             sip_password: "",
             sip_domain: "",
             ws_server: "",
+            sip_protocol: "wss",
             outbound_proxy: "",
+            registrar_server: "",
             is_default: false,
         }
     });
@@ -70,10 +76,13 @@ export function SipAccountDialog({
                 name: account.name || "",
                 display_name: account.display_name || "",
                 sip_username: account.sip_username || "",
+                sip_auth_user: account.sip_auth_user || "",
                 sip_password: "", // Don't populate password
                 sip_domain: account.sip_domain || "",
                 ws_server: account.websocket_server || "",
+                sip_protocol: account.sip_protocol || "wss",
                 outbound_proxy: account.outbound_proxy || "",
+                registrar_server: account.registrar_server || "",
                 is_default: account.is_default || false,
             });
         } else if (!account && open) {
@@ -83,8 +92,8 @@ export function SipAccountDialog({
                 sip_username: "",
                 sip_password: "",
                 sip_domain: "",
-                ws_server: "",
                 outbound_proxy: "",
+                registrar_server: "",
                 is_default: false,
             });
         }
@@ -96,9 +105,13 @@ export function SipAccountDialog({
                 name: data.name || "SIP Account",
                 display_name: data.display_name,
                 sip_username: data.sip_username,
+                sip_auth_user: data.sip_auth_user || undefined,
                 sip_domain: data.sip_domain,
-                websocket_server: data.ws_server || undefined,
+                websocket_server: undefined,
+                sip_protocol: "wss",
                 outbound_proxy: data.outbound_proxy || undefined,
+                registrar_server: data.registrar_server || undefined,
+                janus_url: "wss://sip.nanocall.space:8989", // Janus Secure WebSocket on port 8989
                 is_default: data.is_default,
                 is_active: true,
             };
@@ -119,8 +132,10 @@ export function SipAccountDialog({
             onOpenChange(false);
             onSuccess?.();
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : "Failed to save account";
-            toast.error(errorMessage);
+            console.error("Supabase Save Error:", error);
+            const errObj = error as Record<string, unknown>;
+            const errorMessage = errObj?.message || (typeof error === 'string' ? error : JSON.stringify(error));
+            toast.error(`Error: ${errorMessage}`);
         }
     };
 
@@ -182,13 +197,22 @@ export function SipAccountDialog({
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="sip_username">SIP Username</Label>
+                                <Label htmlFor="sip_username">SIP Username (Extension)</Label>
                                 <Input
                                     id="sip_username"
                                     {...form.register("sip_username")}
-                                    placeholder="1001"
+                                    placeholder="e.g. 1001"
                                     required
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="sip_auth_user">Authorization Username (Optional)</Label>
+                                <Input
+                                    id="sip_auth_user"
+                                    {...form.register("sip_auth_user")}
+                                    placeholder="e.g. auth1001"
+                                />
+                                <p className="text-[10px] text-muted-foreground">Often different from extension for complex providers</p>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="sip_password">SIP Password</Label>
@@ -201,22 +225,13 @@ export function SipAccountDialog({
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="sip_domain">SIP Domain</Label>
+                                <Label htmlFor="sip_domain">SIP Domain (Registrar)</Label>
                                 <Input
                                     id="sip_domain"
                                     {...form.register("sip_domain")}
                                     placeholder="sip.provider.com"
                                     required
                                 />
-                            </div>
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label htmlFor="ws_server">WebSocket Server</Label>
-                                <Input
-                                    id="ws_server"
-                                    {...form.register("ws_server")}
-                                    placeholder="wss://sip.provider.com:8089/ws"
-                                />
-                                <p className="text-xs text-muted-foreground">Required for browser-based calling</p>
                             </div>
                             <div className="space-y-2 sm:col-span-2">
                                 <Label htmlFor="outbound_proxy">Outbound Proxy (Optional)</Label>
@@ -227,6 +242,17 @@ export function SipAccountDialog({
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-2">
+                        <h5 className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                            Universal WebRTC Bridge Active
+                        </h5>
+                        <p className="text-[10px] text-blue-600/90 leading-relaxed">
+                            Your secure Janus Gateway (<strong>wss://sip.nanocall.space/janus/</strong>) is automatically handling the WebSocket translation for this SIP account.
+                        </p>
                     </div>
 
                     <DialogFooter>

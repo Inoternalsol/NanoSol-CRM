@@ -175,7 +175,12 @@ export interface SIPProfile {
     sip_username: string;
     sip_domain: string;
     outbound_proxy?: string;
+    registrar_server?: string;
     websocket_server?: string; // WebSocket server URL (e.g., wss://sip.provider.com:8089/ws)
+    janus_url?: string; // Janus Gateway WSS URL
+    janus_secret?: string; // Janus API secret
+    sip_auth_user?: string; // Authorization username
+    sip_protocol?: string; // Connection protocol (wss, ws)
     sip_password_encrypted?: string; // Stored encrypted in DB
     is_default: boolean;  // Primary account for this user
     is_active: boolean;
@@ -206,7 +211,23 @@ export interface SMTPConfig {
     updated_at: string;
 }
 
-export type EmailAccount = SMTPConfig;
+
+export interface Email {
+    id: string;
+    account_id: string;
+    organization_id: string;
+    from_name?: string;
+    from_addr: string;
+    to_addr: string;
+    subject?: string;
+    body_text?: string;
+    body_html?: string;
+    folder: "inbox" | "sent" | "archive" | "trash";
+    is_read: boolean;
+    has_attachment: boolean;
+    received_at: string;
+    created_at: string;
+}
 
 export interface EmailTemplate {
     id: string;
@@ -354,7 +375,7 @@ export interface UserIntegration {
     provider: "google" | "outlook";
     external_email?: string;
     expires_at?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     created_at: string;
     updated_at: string;
 }

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRealtime } from "./use-realtime";
 import type { Contact, ContactStatus } from "@/types";
 
-const supabase = createClient();
+// const supabase = createClient(); // Moved inside hooks for SSR safety
 
 // ============================================
 // TYPES
@@ -45,6 +45,7 @@ const DEFAULT_STATUSES: Omit<ContactStatus, "id" | "organization_id" | "created_
 // ============================================
 
 async function fetchContacts(): Promise<Contact[]> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("contacts")
         .select("*")
@@ -56,6 +57,7 @@ async function fetchContacts(): Promise<Contact[]> {
 async function fetchContactsPaginated(params: PaginationParams): Promise<PaginatedResult<Contact>> {
     const { page = 1, limit = 50, search, status } = params;
     const offset = (page - 1) * limit;
+    const supabase = createClient();
 
     let query = supabase
         .from("contacts")
@@ -90,17 +92,10 @@ async function fetchContactsPaginated(params: PaginationParams): Promise<Paginat
     };
 }
 
-async function fetchContact(id: string): Promise<Contact | null> {
-    const { data, error } = await supabase
-        .from("contacts")
-        .select("*")
-        .eq("id", id)
-        .single();
-    if (error) throw error;
-    return data;
-}
+
 
 async function fetchContactByPhone(phone: string): Promise<Contact | null> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("contacts")
         .select("*")
@@ -111,6 +106,7 @@ async function fetchContactByPhone(phone: string): Promise<Contact | null> {
 }
 
 async function fetchContactStatuses(): Promise<ContactStatus[]> {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from("contact_statuses")
         .select("*")
@@ -130,6 +126,7 @@ async function fetchContactStatuses(): Promise<ContactStatus[]> {
 }
 
 async function fetchContactCount(profileId?: string, isAdmin?: boolean): Promise<number> {
+    const supabase = createClient();
     let query = supabase.from("contacts").select("*", { count: "exact", head: true });
     if (!isAdmin && profileId) {
         query = query.eq("owner_id", profileId);
@@ -176,13 +173,7 @@ export function useContactsPaginated(params: PaginationParams = {}) {
     );
 }
 
-export function useContact(id: string | null) {
-    return useSWR<Contact | null>(
-        id ? `contact-${id}` : null,
-        () => (id ? fetchContact(id) : null),
-        { revalidateOnFocus: false }
-    );
-}
+
 
 export function useContactByPhone(phone: string | null) {
     return useSWR<Contact | null>(
@@ -218,6 +209,7 @@ export function useCreateContact() {
     return useSWRMutation(
         "contacts",
         async (_, { arg }: { arg: Omit<Contact, "id" | "created_at" | "updated_at"> }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("contacts")
                 .insert([arg])
@@ -236,6 +228,15 @@ export function useUpdateContact() {
     return useSWRMutation(
         "contacts",
         async (_, { arg }: { arg: { id: string; updates: Partial<Contact> } }) => {
+            const supabase = createClient();
+            // Safety check: ensure updates is serializable and not circular
+            try {
+                JSON.stringify(arg.updates);
+            } catch {
+                console.error("[useUpdateContact] Invalid updates payload:", arg.updates);
+                throw new Error("Invalid update payload: circular reference or non-serializable object detected.");
+            }
+
             const { data, error } = await supabase
                 .from("contacts")
                 .update(arg.updates)
@@ -255,6 +256,7 @@ export function useDeleteContact() {
     return useSWRMutation(
         "contacts",
         async (_, { arg }: { arg: string }) => {
+            const supabase = createClient();
             const { error } = await supabase.from("contacts").delete().eq("id", arg);
             if (error) {
                 throw new Error(error.message || error.details || JSON.stringify(error));
@@ -270,6 +272,7 @@ export function useBulkDeleteContacts() {
     return useSWRMutation(
         "contacts",
         async (_, { arg }: { arg: string[] }) => {
+            const supabase = createClient();
             if (arg.length === 0) return;
             const { error } = await supabase.from("contacts").delete().in("id", arg);
             if (error) {
@@ -286,6 +289,7 @@ export function useBulkCreateContacts() {
     return useSWRMutation(
         "contacts",
         async (_, { arg }: { arg: Omit<Contact, "id" | "created_at" | "updated_at">[] }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("contacts")
                 .insert(arg)
@@ -303,6 +307,7 @@ export function useCreateContactStatus() {
     return useSWRMutation(
         "contact-statuses",
         async (_, { arg }: { arg: Omit<ContactStatus, "id" | "created_at"> }) => {
+            const supabase = createClient();
             const { data, error } = await supabase
                 .from("contact_statuses")
                 .insert([arg])
@@ -317,29 +322,13 @@ export function useCreateContactStatus() {
     );
 }
 
-export function useUpdateContactStatus() {
-    return useSWRMutation(
-        "contact-statuses",
-        async (_, { arg }: { arg: { id: string; updates: Partial<ContactStatus> } }) => {
-            const { data, error } = await supabase
-                .from("contact_statuses")
-                .update(arg.updates)
-                .eq("id", arg.id)
-                .select()
-                .single();
-            if (error) throw error;
-            return data;
-        },
-        {
-            revalidate: true,
-        }
-    );
-}
+
 
 export function useDeleteContactStatus() {
     return useSWRMutation(
         "contact-statuses",
         async (_, { arg }: { arg: string }) => {
+            const supabase = createClient();
             const { error } = await supabase
                 .from("contact_statuses")
                 .delete()

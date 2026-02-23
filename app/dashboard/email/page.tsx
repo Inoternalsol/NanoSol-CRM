@@ -33,7 +33,7 @@ import { TemplateDialog } from "@/components/email/template-dialog";
 import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
 import { SequenceDialog } from "@/components/email/sequence-dialog";
 import { SequenceEnrollmentsManager } from "@/components/email/sequence-enrollments-manager";
-import type { EmailTemplate, EmailSequence } from "@/types";
+import type { EmailTemplate, EmailSequence, Email } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -256,11 +256,13 @@ export default function EmailPage() {
             }
 
             // Map UI actions to API actions
-            let apiAction: 'delete' | 'move' | 'mark_read' | 'mark_unread' = action;
+            let apiAction: 'delete' | 'move' | 'mark_read' | 'mark_unread';
             if (action === 'archive' || (action === 'delete' && activeFolder !== 'trash')) {
                 apiAction = 'move';
             } else if (action === 'delete' && activeFolder === 'trash') {
                 apiAction = 'delete';
+            } else {
+                apiAction = action;
             }
 
             await batchAction({

@@ -1,13 +1,25 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import JsSIP from "jssip";
+// Use any for dependencies and types to avoid SSR type issues or missing deep imports
 import { useDialerStore } from "@/lib/stores";
+import { toast } from "sonner";
 
-export interface SipConfig {
+let _JsSIP: any = null;
+let _JanusUA: any = null;
+
+interface SipConfig {
     uri: string;
     password?: string;
+    auth_user?: string;
+    protocol?: string;
     ws_servers: string | string[];
     display_name?: string;
+    outbound_proxy?: string;
+    registrar_server?: string;
+    sip_domain?: string;
+    janus_url?: string;
+    janus_secret?: string;
 }
 
 // Declare global type for window storage
@@ -18,19 +30,28 @@ declare global {
 }
 
 export class SipService {
-    private uas: Map<string, JsSIP.UA> = new Map();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private uas: Map<string, any> = new Map();
     private sessions: Map<string, any> = new Map();
     private _activeUAId: string | null = null;
     private _isConnected: Map<string, boolean> = new Map();
     private _isRegistered: Map<string, boolean> = new Map();
     private _isHangingUp: boolean = false;
-    private _remoteStream: MediaStream | null = null;
+    private _remoteStream: any = null;
 
     private constructor() { }
 
     public static getInstance(): SipService {
         if (typeof window !== "undefined") {
+            // Lazy load dependencies to fix SSR Next.js prerender
+            Promise.all([
+                import("jssip"),
+                import("@/lib/janus/janus-ua")
+            ]).then(([jssipMod, janusMod]) => {
+                _JsSIP = (jssipMod as any).defaultOptions ? jssipMod : (jssipMod as any).default || jssipMod;
+                _JanusUA = (janusMod as any).JanusUA;
+                if (typeof _JsSIP.debug !== "undefined") _JsSIP.debug.enable('JsSIP:*');
+            }).catch(e => console.error("Failed to load SIP deps", e));
+
             if (!window.__SIP_SERVICE__) {
                 window.__SIP_SERVICE__ = new SipService();
             }
@@ -73,50 +94,33 @@ export class SipService {
             return;
         }
 
+        // --- Universal Janus Bridge Implementation ---
+        const bridgeUrl = config.janus_url || "wss://sip.nanocall.space:8989";
         try {
-            console.log(`[SIP] Connecting account ${id}: ${config.uri}`);
-            console.log(`[SIP] WebSocket servers:`, config.ws_servers);
-            const wsServer = Array.isArray(config.ws_servers) ? config.ws_servers[0] : config.ws_servers;
-            console.log(`[SIP] Using WebSocket server:`, wsServer);
-
-            const socket = new JsSIP.WebSocketInterface(wsServer);
-
-            // Add WebSocket event listeners for debugging
-            socket.via_transport = "wss";
-
-            const ua = new JsSIP.UA({
+            console.log(`[SIP] Connecting via Janus Bridge for ${id}: ${bridgeUrl}`);
+            const { JanusUA: JanusUAImpl } = await import("@/lib/janus/janus-ua");
+            const janusUa = new JanusUAImpl({
                 uri: config.uri,
                 password: config.password,
+                auth_user: config.auth_user,
                 display_name: config.display_name,
-                sockets: [socket],
-                register: true,
-                session_timers: false,
-                connection_recovery_min_interval: 2,
-                connection_recovery_max_interval: 30,
-            });
+                janus_url: bridgeUrl,
+                janus_secret: config.janus_secret,
+                proxy: config.registrar_server || config.sip_domain
+            }) as any;
 
-            this.uas.set(id, ua);
-            this.setupEventHandlers(id);
+            this.uas.set(id, janusUa);
+            this.setupJanusHandlers(id, janusUa);
+            await janusUa.register();
 
-            // Log UA events for debugging
-            ua.on('connecting', () => {
-                console.log(`[SIP] Account ${id} connecting...`);
-            });
-
-            ua.start();
-
-            // Set as active if it's the first one or if none active
-            if (!this._activeUAId) {
-                this._activeUAId = id;
-            }
-        } catch (error) {
-            console.error(`[SIP] Failed to initialize SIP UA for ${id}:`, error);
-            console.error(`[SIP] Config was:`, {
-                uri: config.uri,
-                ws_servers: config.ws_servers,
-                display_name: config.display_name
-            });
+            if (!this._activeUAId) this._activeUAId = id;
+            return;
+        } catch (err) {
+            console.error(`[SIP] Janus connection failed for ${id}:`, err);
+            toast.error("Failed to connect to Janus Bridge");
+            return;
         }
+
     }
 
     public disconnect(id?: string) {
@@ -142,6 +146,16 @@ export class SipService {
         this._remoteStream = null;
     }
 
+    public async injectVoicemail(file: File) {
+        const ua = this._activeUAId ? this.uas.get(this._activeUAId) : null;
+        if (ua && 'injectAudioFile' in ua && typeof ua.injectAudioFile === 'function') {
+            await (ua as any).injectAudioFile(file);
+        } else {
+            console.warn("[SIP] Voicemail drop is only supported on the Janus engine");
+            toast.error("Voicemail drop requires active cloud engine setup");
+        }
+    }
+
     public call(target: string, accountId?: string) {
         const id = accountId || this._activeUAId;
         const ua = id ? this.uas.get(id) : null;
@@ -153,9 +167,28 @@ export class SipService {
             return;
         }
 
-        let remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement;
+        if (_JanusUA && ua instanceof _JanusUA) {
+            // Ensure remote audio element exists for WebRTC audio playback
+            let remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+            if (!remoteAudio) {
+                remoteAudio = document.createElement("audio") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+                remoteAudio.id = "sip-remote-audio";
+                remoteAudio.autoplay = true;
+                document.body.appendChild(remoteAudio);
+            }
+
+            const { selectedMicrophoneId, selectedSpeakerId } = useDialerStore.getState();
+            if (selectedSpeakerId && typeof remoteAudio.setSinkId === "function") {
+                remoteAudio.setSinkId(selectedSpeakerId).catch(console.error);
+            }
+
+            ua.call(target, selectedMicrophoneId || undefined);
+            return;
+        }
+
+        let remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
         if (!remoteAudio) {
-            remoteAudio = document.createElement("audio");
+            remoteAudio = document.createElement("audio") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
             remoteAudio.id = "sip-remote-audio";
             remoteAudio.autoplay = true;
             document.body.appendChild(remoteAudio);
@@ -163,8 +196,7 @@ export class SipService {
 
         const eventHandlers = {
             progress: () => useDialerStore.getState().setCallStatus("ringing"),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            failed: (e: any) => {
+            failed: (e: { cause: string }) => {
                 if (this._isHangingUp) {
                     this._isHangingUp = false;
                     useDialerStore.getState().endCall();
@@ -175,9 +207,9 @@ export class SipService {
                 let status: "failed" | "busy" | "rejected" | "no-answer" = "failed";
                 const cause = e.cause;
 
-                if (cause === JsSIP.C.causes.BUSY) status = "busy";
-                else if (cause === JsSIP.C.causes.REJECTED || cause === JsSIP.C.causes.FORBIDDEN) status = "rejected";
-                else if (cause === JsSIP.C.causes.NO_ANSWER || cause === JsSIP.C.causes.REQUEST_TIMEOUT) status = "no-answer";
+                if (cause === _JsSIP.C.causes.BUSY) status = "busy";
+                else if (cause === _JsSIP.C.causes.REJECTED) status = "rejected";
+                else if (cause === _JsSIP.C.causes.NO_ANSWER || cause === _JsSIP.C.causes.REQUEST_TIMEOUT) status = "no-answer";
 
                 console.log(`[SIP] Call failed: ${cause} -> mapping to ${status}`);
 
@@ -186,27 +218,29 @@ export class SipService {
                 // Update queue if auto-dialer is active
                 const store = useDialerStore.getState();
                 if (store.autoDialerActive && store.currentNumber) {
-                    store.updateQueueStatus(store.currentNumber, status as any);
+                    store.updateQueueStatus(store.currentNumber, status);
                 }
 
                 useDialerStore.getState().endCall();
             },
             ended: () => {
-                this.sessions.delete(id!);
+                const id = accountId || this._activeUAId;
+                if (id) this.sessions.delete(id);
                 useDialerStore.getState().endCall();
             },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            confirmed: (e: any) => {
+            confirmed: () => {
                 useDialerStore.getState().setCallStatus("active");
-                this.sessions.set(id!, e.session);
             },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            peerconnection: (e: any) => {
+            peerconnection: (e: { peerconnection: RTCPeerConnection }) => {
                 const peerconnection = e.peerconnection as RTCPeerConnection;
                 peerconnection.ontrack = (event: RTCTrackEvent) => {
                     if (event.track.kind === "audio" && remoteAudio) {
                         this._remoteStream = event.streams[0];
                         remoteAudio.srcObject = this._remoteStream;
+                        const { selectedSpeakerId } = useDialerStore.getState();
+                        if (selectedSpeakerId && typeof remoteAudio.setSinkId === "function") {
+                            remoteAudio.setSinkId(selectedSpeakerId).catch(console.error);
+                        }
                         remoteAudio.play().catch(() => { });
                     }
                 };
@@ -221,7 +255,7 @@ export class SipService {
 
         try {
             console.log(`[SIP] Placing call from account ${id} to ${target}`);
-            const session = ua.call(target, options);
+            const session = (ua as any).call(target, options);
             this.sessions.set(id!, session);
         } catch (e) {
             console.error("Call error:", e);
@@ -229,11 +263,33 @@ export class SipService {
         }
     }
 
-    public answer(accountId?: string) {
+    public async answer(jsepOffer?: RTCSessionDescriptionInit | undefined, accountId?: string) {
         const id = accountId || this._activeUAId;
         const session = id ? this.sessions.get(id) : null;
-        if (session) {
-            session.answer({ mediaConstraints: { audio: true, video: false } });
+
+        const { selectedMicrophoneId, selectedSpeakerId } = useDialerStore.getState();
+        const remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+
+        if (remoteAudio && selectedSpeakerId && typeof remoteAudio.setSinkId === "function") {
+            remoteAudio.setSinkId(selectedSpeakerId).catch(console.error);
+        }
+
+        if (session && 'answer' in session && typeof session.answer === 'function' && jsepOffer) {
+            await (session as any).answer(jsepOffer, selectedMicrophoneId || undefined);
+        } else if (session) {
+            (session as any).answer({
+                mediaConstraints: { audio: selectedMicrophoneId ? { deviceId: { exact: selectedMicrophoneId } } : true, video: false }
+            });
+        }
+    }
+
+    public async decline(accountId?: string) {
+        const id = accountId || this._activeUAId;
+        const session = id ? this.sessions.get(id) : null;
+        if (session && 'decline' in session) {
+            await (session as any).decline();
+        } else if (session) {
+            this.hangup(id || undefined);
         }
     }
 
@@ -254,7 +310,11 @@ export class SipService {
             try {
                 this._isHangingUp = true;
                 this.sessions.delete(id!);
-                session.terminate();
+                if ('hangup' in session) {
+                    (session as any).hangup();
+                } else {
+                    (session as unknown as import('jssip/src/RTCSession').RTCSession).terminate();
+                }
             } catch {
                 this._isHangingUp = false;
             }
@@ -268,7 +328,7 @@ export class SipService {
         if (session) session.sendDTMF(tone);
     }
 
-    public mute(isMuted: boolean, accountId?: string) {
+    public巡mute(isMuted: boolean, accountId?: string) {
         const id = accountId || this._activeUAId;
         const session = id ? this.sessions.get(id) : null;
         if (session) {
@@ -286,23 +346,23 @@ export class SipService {
             this._isConnected.set(id, true);
         });
 
-        ua.on('disconnected', (data) => {
+        ua.on('disconnected', (data: any) => {
             console.log(`[SIP] ❌ Account ${id} disconnected from WebSocket`, data);
             console.log(`[SIP] Disconnect reason:`, data?.error || 'Unknown');
             this._isConnected.set(id, false);
         });
 
-        ua.on('registered', (data) => {
+        ua.on('registered', (data: any) => {
             console.log(`[SIP] ✅ Account ${id} successfully registered`, data);
             this._isRegistered.set(id, true);
         });
 
-        ua.on('unregistered', (data) => {
+        ua.on('unregistered', (data: any) => {
             console.log(`[SIP] Account ${id} unregistered`, data);
             this._isRegistered.set(id, false);
         });
 
-        ua.on('registrationFailed', (data) => {
+        ua.on('registrationFailed', (data: any) => {
             const statusCode = data?.response?.status_code;
             const reasonPhrase = data?.response?.reason_phrase;
             const cause = data?.cause || 'Unknown';
@@ -313,6 +373,10 @@ export class SipService {
                 (statusCode ? ` | Status: ${statusCode} ${reasonPhrase || ''}` : '')
             );
 
+            if (data.response) {
+                console.warn(`[SIP] Full registration response for ${id}:`, data.response);
+            }
+
             this._isRegistered.set(id, false);
         });
 
@@ -320,8 +384,7 @@ export class SipService {
             console.log(`[SIP] Account ${id} registration expiring, will re-register...`);
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ua.on('newRTCSession', (data: { session: any }) => {
+        ua.on('newRTCSession', (data: { session: any; originator: string }) => {
             const session = data.session;
             if (session.direction === 'incoming') {
                 console.log(`[SIP] Incoming call on account ${id}`);
@@ -344,6 +407,81 @@ export class SipService {
                 session.on('accepted', () => {
                     store.setCallStatus("active");
                 });
+            }
+        });
+    }
+
+    private setupJanusHandlers(id: string, ua: any) {
+        ua.on('registered', () => {
+            console.log(`[SIP] ✅ Account ${id} registered via Janus`);
+            this._isRegistered.set(id, true);
+            this._isConnected.set(id, true);
+        });
+
+        ua.on('incomingcall', (msg: unknown) => {
+            const typedMsg = msg as { plugindata?: { data?: { result?: { username?: string, display_name?: string } } }, jsep?: RTCSessionDescriptionInit };
+            console.log(`[SIP] 📞 Incoming call detected on account ${id}!`, typedMsg);
+            const callerData = typedMsg.plugindata?.data?.result;
+            const callerNumber = callerData?.username || "Unknown";
+            const jsep = typedMsg.jsep;
+
+            if (jsep) {
+                // Set the active UA id so we answer on the right account
+                this.activeUAId = id;
+                // Dispatch to the global store
+                useDialerStore.getState().setIncomingCall({
+                    callerNumber,
+                    name: callerData?.display_name,
+                    jsep,
+                    handleId: (ua as unknown as { handleId: number }).handleId || 0
+                });
+            } else {
+                console.warn("[SIP] ⚠️ Incoming call missing JSEP offer. Cannot answer.");
+            }
+        });
+
+        ua.on('registration_failed', (data: unknown) => {
+            const msg = data as { plugindata?: { data?: { error_code?: number; error?: string } } };
+            const errorCode = msg?.plugindata?.data?.error_code;
+            const errorMsg = msg?.plugindata?.data?.error;
+            console.error(`[SIP] ❌ Janus registration failed for ${id}: Error ${errorCode}: ${errorMsg}`);
+            this._isRegistered.set(id, false);
+            toast.error(`SIP Registration failed: ${errorMsg || 'Unknown error'}`);
+        });
+
+        ua.on('sip_error', (data: unknown) => {
+            const msg = data as { plugindata?: { data?: { error_code?: number; error?: string } } };
+            const errorCode = msg?.plugindata?.data?.error_code;
+            const errorMsg = msg?.plugindata?.data?.error;
+            console.warn(`[SIP] ⚠️ SIP error for ${id}: Error ${errorCode}: ${errorMsg}`);
+            // Don't kill registration state — this is a call-level error, not registration
+        });
+
+        ua.on('accepted', () => {
+            console.log(`[SIP] Janus call accepted`);
+            useDialerStore.getState().setCallStatus("active");
+        });
+
+        ua.on('ended', () => {
+            console.log(`[SIP] Janus call ended`);
+            useDialerStore.getState().endCall();
+        });
+
+        ua.on('track', (event: any) => {
+            console.log(`[SIP] Janus track received:`, event?.track?.kind, event?.streams?.length, 'streams');
+            if (event.streams && event.streams[0]) {
+                this._remoteStream = event.streams[0];
+                let remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement;
+                if (!remoteAudio) {
+                    console.log("[SIP] Creating audio element for remote stream");
+                    remoteAudio = document.createElement("audio");
+                    remoteAudio.id = "sip-remote-audio";
+                    remoteAudio.autoplay = true;
+                    document.body.appendChild(remoteAudio);
+                }
+                remoteAudio.srcObject = this._remoteStream;
+                remoteAudio.play().catch((e) => console.warn("[SIP] Audio play failed:", e));
+                console.log("[SIP] ✅ Remote audio stream attached and playing");
             }
         });
     }

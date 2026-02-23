@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { mutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 
-const supabase = createClient();
+// const supabase = createClient(); // Moved inside useEffect for SSR safety
 
 /**
  * A reusable hook to subscribe to Supabase Realtime changes for a specific table.
@@ -21,6 +21,7 @@ export function useRealtime(
     filter?: string
 ) {
     useEffect(() => {
+        const supabase = createClient();
         const channelName = `public:${table}-changes`;
         console.log(`[Realtime] Initializing channel: ${channelName}`);
         let channel = supabase.channel(channelName);

@@ -18,7 +18,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDialerStore } from "@/lib/stores";
 import { useCallLogs } from "@/hooks/use-data";
-import { SipService } from "@/lib/services/sip-service";
 import { formatDistanceToNow } from "date-fns";
 import type { CallLog } from "@/types";
 
@@ -90,9 +89,10 @@ export default function CallsPage() {
     const { openDialer, setCurrentNumber, startCall } = useDialerStore();
     const { data: callLogs, isLoading, error } = useCallLogs(100);
 
-    const handleCallContact = (phone: string) => {
+    const handleCallContact = async (phone: string) => {
         setCurrentNumber(phone);
         openDialer();
+        const { SipService } = await import("@/lib/services/sip-service");
         SipService.getInstance().call(phone);
         startCall();
     };
