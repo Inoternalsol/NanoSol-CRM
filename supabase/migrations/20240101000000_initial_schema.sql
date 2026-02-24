@@ -2,9 +2,12 @@
 -- Run this in your Supabase SQL Editor
 
 -- Enable necessary extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "vector";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
+CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "extensions";
+
+-- Set search path to include extensions
+SET search_path TO public, extensions, auth;
 
 -- ============================================
 -- ORGANIZATIONS
@@ -65,8 +68,8 @@ BEGIN
     END IF;
 END $$;
 
--- HNSW index for high-performance vector search
-CREATE INDEX IF NOT EXISTS idx_contacts_embedding ON contacts USING hnsw (embedding vector_cosine_ops);
+-- HNSW index for high-performance vector search (commented out due to compatibility issues on some Supabase versions)
+-- CREATE INDEX IF NOT EXISTS idx_contacts_embedding ON contacts USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS idx_contacts_org ON contacts(organization_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
@@ -109,8 +112,8 @@ BEGIN
     END IF;
 END $$;
 
--- HNSW index for deals
-CREATE INDEX IF NOT EXISTS idx_deals_embedding ON deals USING hnsw (embedding vector_cosine_ops);
+-- HNSW index for deals (commented out due to compatibility issues)
+-- CREATE INDEX IF NOT EXISTS idx_deals_embedding ON deals USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS idx_deals_org ON deals(organization_id);
 CREATE INDEX IF NOT EXISTS idx_deals_pipeline ON deals(pipeline_id);
