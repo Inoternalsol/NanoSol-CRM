@@ -103,20 +103,26 @@ export default function ContactsPage() {
 
     const { startAutoDialer, setAutoDialerQueue, openDialer, setCurrentNumber, startCall } = useDialerStore();
 
+    const { data: profiles } = useProfiles();
+    const { data: activeProfile } = useActiveProfile();
+
+    // Determine the effective owner filter based on role
+    const isManagerOrAdmin = activeProfile?.role === "admin" || activeProfile?.role === "manager";
+    const effectiveOwnerId = isManagerOrAdmin ? undefined : activeProfile?.id;
+
     // Switch to Paginated Hook
     const { data: paginatedResult, isLoading, mutate } = useContactsPaginated({
         page,
         limit: LIMIT,
         search: filters.search,
-        status: filters.status === 'all' ? undefined : filters.status
+        status: filters.status === 'all' ? undefined : filters.status,
+        ownerId: effectiveOwnerId
     });
 
     const contacts = paginatedResult?.data || [];
     const totalItems = paginatedResult?.total || 0;
     const totalPages = paginatedResult?.totalPages || 1;
 
-    const { data: profiles } = useProfiles();
-    const { data: activeProfile } = useActiveProfile();
     const { trigger: deleteContact } = useDeleteContact();
     const { trigger: bulkDeleteContacts } = useBulkDeleteContacts();
     const { trigger: updateContact } = useUpdateContact();
@@ -228,7 +234,13 @@ export default function ContactsPage() {
             toast.info("Preparing export...");
             // Simple fetch all for now
             const supabase = createClient();
-            const { data } = await supabase.from('contacts').select('*');
+            let query = supabase.from('contacts').select('*');
+
+            if (effectiveOwnerId) {
+                query = query.eq('owner_id', effectiveOwnerId);
+            }
+
+            const { data } = await query;
             // Apply client filters if needed or trust user just wants "All"
             if (data) exportData = data;
         }
@@ -355,6 +367,9 @@ export default function ContactsPage() {
             }
             if (filters.status && filters.status !== "all") {
                 query = query.eq("status", filters.status);
+            }
+            if (effectiveOwnerId) {
+                query = query.eq("owner_id", effectiveOwnerId);
             }
 
             const { data, error } = await query;
@@ -737,7 +752,6 @@ export default function ContactsPage() {
                 </CardContent>
             </Card>
 
-            {/* Contact Dialog */}
             <ContactDialog
                 open={dialogOpen}
                 onOpenChange={(open) => {
@@ -746,6 +760,7 @@ export default function ContactsPage() {
                 }}
                 contact={editingContact}
                 organizationId={activeProfile?.organization_id || ""}
+                ownerId={activeProfile?.id}
                 onSuccess={handleSuccess}
             />
 
@@ -753,6 +768,7 @@ export default function ContactsPage() {
                 open={importDialogOpen}
                 onOpenChange={setImportDialogOpen}
                 organizationId={activeProfile?.organization_id || ""}
+                ownerId={activeProfile?.id}
                 onSuccess={mutate}
             />
 

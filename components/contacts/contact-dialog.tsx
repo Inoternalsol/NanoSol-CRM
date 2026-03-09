@@ -48,6 +48,7 @@ interface ContactDialogProps {
     onOpenChange: (open: boolean) => void;
     contact?: Contact | null;
     organizationId: string;
+    ownerId?: string;
     onSuccess?: () => void;
 }
 
@@ -56,6 +57,7 @@ export function ContactDialog({
     onOpenChange,
     contact,
     organizationId,
+    ownerId,
     onSuccess,
 }: ContactDialogProps) {
     const isEditing = !!contact;
@@ -157,6 +159,7 @@ export function ContactDialog({
                 await createContact({
                     ...data,
                     organization_id: organizationId,
+                    owner_id: ownerId, // Automatically assign to the current agent creating the contact
                     tags: [],
                     custom_fields: {},
                     lead_score: Number(data.lead_score),

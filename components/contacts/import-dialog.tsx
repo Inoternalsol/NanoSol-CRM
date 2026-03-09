@@ -28,6 +28,7 @@ interface ImportDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     organizationId: string;
+    ownerId?: string;
     onSuccess?: () => void;
 }
 
@@ -35,6 +36,7 @@ export function ImportDialog({
     open,
     onOpenChange,
     organizationId,
+    ownerId,
     onSuccess,
 }: ImportDialogProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +99,7 @@ export function ImportDialog({
                     company: row.company || null,
                     job_title: row.job_title || null,
                     status: row.status || "new",
+                    owner_id: ownerId, // Assign to the agent importing
                     lead_score: Number(row.lead_score) || 0,
                     tags: [],
                     custom_fields: {},

@@ -18,6 +18,7 @@ export interface PaginationParams {
     limit?: number;
     search?: string;
     status?: string;
+    ownerId?: string;
 }
 
 export interface PaginatedResult<T> {
@@ -55,13 +56,18 @@ async function fetchContacts(): Promise<Contact[]> {
 }
 
 async function fetchContactsPaginated(params: PaginationParams): Promise<PaginatedResult<Contact>> {
-    const { page = 1, limit = 50, search, status } = params;
+    const { page = 1, limit = 50, search, status, ownerId } = params;
     const offset = (page - 1) * limit;
     const supabase = createClient();
 
     let query = supabase
         .from("contacts")
         .select("*", { count: "exact" });
+
+    // Apply owner filter (crucial for visibility bug)
+    if (ownerId && ownerId !== "all") {
+        query = query.eq("owner_id", ownerId);
+    }
 
     // Apply search filter
     if (search) {
