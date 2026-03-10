@@ -1,24 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-// Admin Client for Public API (Bypasses RLS)
-const supabaseUrl = "https://xqsewdcggvujkmddtltd.supabase.co";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-
-// Helper to validate origin/cors (placeholder for now)
-// Helper to validate origin/cors (placeholder for now)
-// function validateOrigin(request: Request) {
-//    const origin = request.headers.get("origin") || "";
-//    // In future, check DB config for allowed_origins
-//    return true;
-// }
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
     try {
-        // const supabase = createClient(); // REMOVED standard client
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xqsewdcggvujkmddtltd.supabase.co";
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+        const supabase = createClient(supabaseUrl, supabaseKey);
 
         // 1. Validate Form ID (Header or Body)
         const headersObj = Object.fromEntries(
