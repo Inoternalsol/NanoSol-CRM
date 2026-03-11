@@ -79,9 +79,15 @@ export default function ReportsPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{calls.total}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {calls.connected} connected
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs text-muted-foreground">
+                                {calls.connected} connected
+                            </p>
+                            <span className="text-muted-foreground text-xs">•</span>
+                            <p className="text-xs text-muted-foreground">
+                                {Math.floor(calls.averageDuration / 60)}m {calls.averageDuration % 60}s avg
+                            </p>
+                        </div>
                     </CardContent>
                 </Card>
                 <Card>

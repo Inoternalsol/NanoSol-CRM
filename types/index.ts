@@ -21,6 +21,7 @@ export interface Profile {
     avatar_url?: string;
     role: "admin" | "manager" | "agent" | "viewer";
     phone?: string;
+    notification_preferences?: Record<string, boolean>;
     created_at: string;
     updated_at: string;
 }

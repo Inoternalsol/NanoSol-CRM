@@ -5,7 +5,7 @@
 -- API KEYS TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS api_keys (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   openai_key_encrypted TEXT,
   gemini_key_encrypted TEXT,

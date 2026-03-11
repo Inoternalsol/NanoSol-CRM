@@ -1,7 +1,7 @@
 -- Notifications Table Migration
 
 CREATE TABLE IF NOT EXISTS notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -25,15 +25,19 @@ CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
 -- Enable RLS
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users_view_own_notifications" ON notifications;
 CREATE POLICY "users_view_own_notifications" ON notifications FOR SELECT
   USING (user_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "users_update_own_notifications" ON notifications;
 CREATE POLICY "users_update_own_notifications" ON notifications FOR UPDATE
   USING (user_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "users_delete_own_notifications" ON notifications;
 CREATE POLICY "users_delete_own_notifications" ON notifications FOR DELETE
   USING (user_id IN (SELECT id FROM profiles WHERE user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "system_insert_notifications" ON notifications;
 CREATE POLICY "system_insert_notifications" ON notifications FOR INSERT
   WITH CHECK (true); -- Usually inserts happen server-side
 

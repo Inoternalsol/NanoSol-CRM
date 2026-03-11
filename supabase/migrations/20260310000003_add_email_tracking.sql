@@ -9,7 +9,7 @@ ADD COLUMN IF NOT EXISTS click_count INTEGER DEFAULT 0;
 
 -- 2. Create Email Tracking Events table
 CREATE TABLE IF NOT EXISTS public.email_tracking_events (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email_id UUID NOT NULL REFERENCES public.emails(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL CHECK (event_type IN ('open', 'click')),
     link_url TEXT, -- Only applicable for 'click' events
@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_email_tracking_events_email_id ON public.email_tr
 
 -- 3. Create Deal Notes table
 CREATE TABLE IF NOT EXISTS public.deal_notes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     deal_id UUID NOT NULL REFERENCES public.deals(id) ON DELETE CASCADE,
     author_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     content TEXT NOT NULL,

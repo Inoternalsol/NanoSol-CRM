@@ -6,6 +6,7 @@ export interface AnalyticsData {
     calls: {
         total: number;
         connected: number;
+        averageDuration: number;
         volumeByDay: { name: string; calls: number; connected: number }[];
     };
     tasks: {
@@ -32,10 +33,6 @@ export interface AnalyticsData {
     }[];
 }
 
-interface CallMetadata {
-    outcome?: string;
-    [key: string]: unknown;
-}
 
 const fetchAnalytics = async (ownerId?: string, days: number = 7, pipelineId?: string): Promise<AnalyticsData> => {
     const supabase = createClient();
@@ -44,10 +41,9 @@ const fetchAnalytics = async (ownerId?: string, days: number = 7, pipelineId?: s
 
     // Build base queries
     let callsQuery = supabase
-        .from('activities')
-        .select('created_at, metadata, created_by')
-        .eq('type', 'call')
-        .gte('created_at', startOfDay(startDate).toISOString());
+        .from('call_logs')
+        .select('started_at, status, user_id, duration_seconds')
+        .gte('started_at', startOfDay(startDate).toISOString());
 
     let tasksQuery = supabase
         .from('tasks')
@@ -81,18 +77,12 @@ const fetchAnalytics = async (ownerId?: string, days: number = 7, pipelineId?: s
     // Process Calls
     const volumeByDay = Array.from({ length: days }).map((_, i) => {
         const date = subDays(today, days - 1 - i);
-        const dayStr = days <= 14 ? format(date, 'EEE') : format(date, 'MMM d'); // Mon, Tue OR Mar 1
+        const dayStr = days <= 14 ? format(date, 'EEE') : format(date, 'MMM d');
         const dayCalls = callsData?.filter(c =>
-            new Date(c.created_at).toDateString() === date.toDateString()
+            new Date(c.started_at).toDateString() === date.toDateString()
         ) || [];
 
-        // Check if metadata indicates connection (assuming metadata.outcome or similar)
-        // Adjust based on your actual metadata structure for calls
-        const connectedCalls = dayCalls.filter(c => {
-            const metadata = c.metadata as CallMetadata;
-            const outcome = metadata?.outcome;
-            return outcome === 'connected' || outcome === 'answered';
-        });
+        const connectedCalls = dayCalls.filter(c => c.status === 'completed');
 
         return {
             name: dayStr,
@@ -102,11 +92,9 @@ const fetchAnalytics = async (ownerId?: string, days: number = 7, pipelineId?: s
     });
 
     const totalCalls = callsData?.length || 0;
-    const totalConnected = callsData?.filter(c => {
-        const metadata = c.metadata as CallMetadata;
-        const outcome = metadata?.outcome;
-        return outcome === 'connected' || outcome === 'answered';
-    }).length || 0;
+    const totalConnected = callsData?.filter(c => c.status === 'completed').length || 0;
+    const totalDuration = callsData?.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0) || 0;
+    const averageDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
 
 
     // 2. Fetch Tasks
@@ -188,7 +176,7 @@ const fetchAnalytics = async (ownerId?: string, days: number = 7, pipelineId?: s
 
     // Add calls
     callsData?.forEach(c => {
-        const owner = c.created_by;
+        const owner = c.user_id;
         if (owner && leaderboardMap[owner]) {
             leaderboardMap[owner].callsMade++;
         }
@@ -217,6 +205,7 @@ const fetchAnalytics = async (ownerId?: string, days: number = 7, pipelineId?: s
         calls: {
             total: totalCalls,
             connected: totalConnected,
+            averageDuration,
             volumeByDay
         },
         tasks: {

@@ -1,7 +1,7 @@
 -- Fix Missing Tables and Columns (contact_statuses, sip_profiles)
 -- 1. Create contact_statuses table if it doesn't exist
 CREATE TABLE IF NOT EXISTS public.contact_statuses (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     label TEXT NOT NULL,

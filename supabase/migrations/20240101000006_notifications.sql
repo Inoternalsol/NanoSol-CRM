@@ -1,6 +1,6 @@
 -- Migration: Add Notifications Table
 CREATE TABLE IF NOT EXISTS notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -16,10 +16,12 @@ CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_id, read
 
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can only see their own notifications" ON notifications;
 CREATE POLICY "Users can only see their own notifications"
   ON notifications FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own notifications (mark as read)" ON notifications;
 CREATE POLICY "Users can update their own notifications (mark as read)"
   ON notifications FOR UPDATE
   USING (user_id = auth.uid());

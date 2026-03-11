@@ -39,7 +39,7 @@ ALTER TABLE smtp_configs DROP CONSTRAINT IF EXISTS smtp_configs_organization_id_
 
 -- 4. Create Emails table for synced messages
 CREATE TABLE IF NOT EXISTS emails (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id UUID NOT NULL REFERENCES smtp_configs(id) ON DELETE CASCADE,
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   message_id TEXT, -- IMAP Message ID for deduplication
@@ -103,6 +103,7 @@ CREATE POLICY "email_accounts_update" ON smtp_configs FOR UPDATE
   );
 
 -- Emails RLS: Based on account access
+DROP POLICY IF EXISTS "emails_select" ON emails;
 CREATE POLICY "emails_select" ON emails FOR SELECT
   USING (
     account_id IN (
@@ -113,6 +114,7 @@ CREATE POLICY "emails_select" ON emails FOR SELECT
     )
   );
 
+DROP POLICY IF EXISTS "emails_modify" ON emails;
 CREATE POLICY "emails_modify" ON emails FOR ALL
   USING (
     account_id IN (

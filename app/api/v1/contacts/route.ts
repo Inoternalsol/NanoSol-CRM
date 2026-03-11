@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { validateApiKey, ApiContext } from "@/lib/api-middleware";
+import { evaluateTriggers } from "@/lib/automations/engine";
 import { z } from "zod";
 
 export const dynamic = 'force-dynamic';
@@ -70,11 +71,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 400 });
         }
 
+        // Fire Automation Engine Triggers for the newly created lead
+        await evaluateTriggers('contact_created', organization_id, {
+            contactId: data.id,
+            source: 'API'
+        });
+
         return NextResponse.json({ data }, { status: 201 });
 
-    } catch (e) {
+    } catch (e: unknown) {
         if (e instanceof z.ZodError) {
-            return NextResponse.json({ error: (e as any).errors }, { status: 400 });
+            return NextResponse.json({ error: e.errors }, { status: 400 });
         }
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }

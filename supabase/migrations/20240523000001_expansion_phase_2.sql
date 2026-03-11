@@ -2,7 +2,7 @@
 
 -- 1. Web to Lead Forms
 CREATE TABLE IF NOT EXISTS public.web_forms (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     source TEXT NOT NULL, -- 'website', 'google_form', 'linkedin', etc.
@@ -16,12 +16,14 @@ CREATE TABLE IF NOT EXISTS public.web_forms (
 -- RLS for web_forms
 ALTER TABLE public.web_forms ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their organization's web forms" ON public.web_forms;
 CREATE POLICY "Users can view their organization's web forms"
     ON public.web_forms FOR SELECT
     USING (organization_id IN (
         SELECT organization_id FROM public.profiles WHERE user_id = auth.uid()
     ));
 
+DROP POLICY IF EXISTS "Users can manage their organization's web forms" ON public.web_forms;
 CREATE POLICY "Users can manage their organization's web forms"
     ON public.web_forms FOR ALL
     USING (organization_id IN (
@@ -30,7 +32,7 @@ CREATE POLICY "Users can manage their organization's web forms"
 
 -- 2. Organization API Keys
 CREATE TABLE IF NOT EXISTS public.organization_api_keys (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     key_hash TEXT NOT NULL, -- SHA256 hash of the key
     key_prefix TEXT NOT NULL, -- 'nk_live_' or similar
@@ -45,12 +47,14 @@ CREATE TABLE IF NOT EXISTS public.organization_api_keys (
 -- RLS for api_keys
 ALTER TABLE public.organization_api_keys ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their organization's api keys" ON public.organization_api_keys;
 CREATE POLICY "Users can view their organization's api keys"
     ON public.organization_api_keys FOR SELECT
     USING (organization_id IN (
         SELECT organization_id FROM public.profiles WHERE user_id = auth.uid()
     ));
 
+DROP POLICY IF EXISTS "Admins can manage api keys" ON public.organization_api_keys;
 CREATE POLICY "Admins can manage api keys"
     ON public.organization_api_keys FOR ALL
     USING (
@@ -62,7 +66,7 @@ CREATE POLICY "Admins can manage api keys"
 
 -- 3. Notifications
 CREATE TABLE IF NOT EXISTS public.notifications (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
@@ -77,14 +81,17 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 -- RLS for notifications
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can see their own notifications" ON public.notifications;
 CREATE POLICY "Users can see their own notifications"
     ON public.notifications FOR SELECT
     USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "System/Functions can insert notifications" ON public.notifications;
 CREATE POLICY "System/Functions can insert notifications"
     ON public.notifications FOR INSERT
     WITH CHECK (TRUE); -- Allow insert, typically handled by server-side logic or triggers
 
+DROP POLICY IF EXISTS "Users can update their own notifications (mark as read)" ON public.notifications;
 CREATE POLICY "Users can update their own notifications (mark as read)"
     ON public.notifications FOR UPDATE
     USING (user_id = auth.uid());

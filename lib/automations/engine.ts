@@ -189,30 +189,36 @@ async function executeEmailAction(run: WorkflowRun, node: RFNode) {
 
 async function evaluateCondition(run: WorkflowRun, node: RFNode): Promise<'true' | 'false'> {
     const { field, operator, value } = node.data;
-    if (!field || !operator) return 'true'; // Default path
+    if (!field || !operator) return 'true'; // Default path if misconfigured
 
-    const contactValue = (run.contact as any)[field];
+    const contactValue = (run.contact as any)[field as string];
 
     switch (operator) {
-        case 'equals': return String(contactValue) === String(value) ? 'true' : 'false';
-        case 'contains': return String(contactValue).includes(String(value)) ? 'true' : 'false';
+        case 'equals': return String(contactValue).trim().toLowerCase() === String(value).trim().toLowerCase() ? 'true' : 'false';
+        case 'contains': return String(contactValue).toLowerCase().includes(String(value).toLowerCase()) ? 'true' : 'false';
         case 'exists': return !!contactValue ? 'true' : 'false';
+        case 'greater_than': return Number(contactValue) > Number(value) ? 'true' : 'false';
+        case 'less_than': return Number(contactValue) < Number(value) ? 'true' : 'false';
         default: return 'true';
     }
 }
 
 async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
     const actionType = node.data.actionType;
+    
     if (actionType === 'add_tag') {
-        const tag = node.data.tag;
+        const tag = node.data.tag as string;
+        if (!tag) return;
+        
         const currentTags = run.contact.tags || [];
         if (!currentTags.includes(tag)) {
             await getSupabaseAdmin().from('contacts')
                 .update({ tags: [...currentTags, tag] })
                 .eq('id', run.contact_id);
+            await logExecution(run, node.id, 'info', `Added tag: ${tag}`);
         }
-    } else if (actionType === 'calculate_score') {
-        // Trigger the scoring logic
+    } 
+    else if (actionType === 'calculate_score') {
         const { data: activities } = await getSupabaseAdmin()
             .from('activities')
             .select('*')
@@ -238,11 +244,20 @@ async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
                     .eq('id', run.contact_id);
                 await logExecution(run, node.id, 'info', `AI Lead Score updated: ${result.score}`);
             }
+        } else {
+             await logExecution(run, node.id, 'error', `Cannot calculate lead score: Missing API Keys for organization`);
         }
+    }
+    // Reserved for future expansion natively described in the Builder UI
+    else if (actionType === 'update_stage') {
+        await logExecution(run, node.id, 'info', `Update stage action placeholder fired.`);
+    }
+    else if (actionType === 'assign_owner') {
+        await logExecution(run, node.id, 'info', `Assign owner action placeholder fired.`);
     }
 }
 
-export async function evaluateTriggers(triggerType: string, organizationId: string, payload: { contactId: string;[key: string]: any }) {
+export async function evaluateTriggers(triggerType: string, organizationId: string, payload: { contactId: string; [key: string]: any }) {
     // 1. Fetch active workflows for this trigger
     const { data: workflows } = await getSupabaseAdmin()
         .from('workflows')
@@ -250,7 +265,7 @@ export async function evaluateTriggers(triggerType: string, organizationId: stri
         .eq('organization_id', organizationId)
         .eq('is_active', true);
 
-    if (!workflows) return;
+    if (!workflows || workflows.length === 0) return;
 
     for (const workflow of workflows) {
         const nodes = workflow.nodes as RFNode[];
@@ -258,9 +273,9 @@ export async function evaluateTriggers(triggerType: string, organizationId: stri
 
         if (!triggerNode) continue;
 
-        // Check trigger specific conditions (e.g. formId)
+        // Check trigger specific conditions (e.g. formId routing)
         if (triggerType === 'lead_created' && triggerNode.data.formId && triggerNode.data.formId !== payload.formId) {
-            continue;
+            continue; // Skip if this workflow is listening for a specific web form, but a different one was submitted
         }
 
         // 2. Create Workflow Run
@@ -270,15 +285,17 @@ export async function evaluateTriggers(triggerType: string, organizationId: stri
                 organization_id: organizationId,
                 workflow_id: workflow.id,
                 contact_id: payload.contactId,
-                status: 'running',
+                status: 'waiting', // Start waiting so the Cron can cleanly pick it up, or process it immediately below
                 metadata: { trigger_payload: payload }
             })
             .select()
             .single();
 
         if (run && !runError) {
-            // 3. Start processing
-            await processWorkflowRun(run.id);
+            // 3. Start processing immediately for the first node
+            await processWorkflowRun(run.id, 0);
+        } else if (runError) {
+             console.error("Failed to insert workflow run:", runError);
         }
     }
 }

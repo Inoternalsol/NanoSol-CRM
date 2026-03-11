@@ -224,3 +224,14 @@ export function useSetDefaultSipAccount() {
     });
 }
 
+
+export function useUpdatePassword() {
+    return useSWRMutation("auth-password", async (_, { arg }: { arg: string }) => {
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.updateUser({
+            password: arg
+        });
+        if (error) throw error;
+        return data;
+    });
+}

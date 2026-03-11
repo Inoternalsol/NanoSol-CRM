@@ -296,6 +296,100 @@ function BuilderInternal({ workflow }: WorkflowBuilderProps) {
                                     </div>
                                 )}
 
+                                {/* Condition Config */}
+                                {selectedNode.type === 'condition' && (
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>Field to Check</Label>
+                                            <Select
+                                                value={selectedNode.data.field as string}
+                                                onValueChange={(val) => updateNodeData(selectedNode.id, { field: val })}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Field" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="lead_score">Lead Score</SelectItem>
+                                                    <SelectItem value="tags">Tags</SelectItem>
+                                                    <SelectItem value="email">Email Address</SelectItem>
+                                                    <SelectItem value="status">Status</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Operator</Label>
+                                            <Select
+                                                value={selectedNode.data.operator as string}
+                                                onValueChange={(val) => updateNodeData(selectedNode.id, { operator: val })}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Operator" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="equals">Equals (===)</SelectItem>
+                                                    <SelectItem value="contains">Contains / Includes</SelectItem>
+                                                    <SelectItem value="exists">Exists (Is Not Empty)</SelectItem>
+                                                    <SelectItem value="greater_than">Greater Than (\&gt;)</SelectItem>
+                                                    <SelectItem value="less_than">Less Than (\&lt;)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        {selectedNode.data.operator !== 'exists' && (
+                                            <div className="space-y-2">
+                                                <Label>Value</Label>
+                                                <Input
+                                                    placeholder="Target value..."
+                                                    value={selectedNode.data.value as string || ''}
+                                                    onChange={(e) => updateNodeData(selectedNode.id, { value: e.target.value })}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* General Action Config */}
+                                {selectedNode.type === 'action' && (
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>Action Type</Label>
+                                            <Select
+                                                value={selectedNode.data.actionType as string || 'add_tag'}
+                                                onValueChange={(val) => updateNodeData(selectedNode.id, { actionType: val })}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Action" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="add_tag">Add Tag</SelectItem>
+                                                    <SelectItem value="calculate_score">Assign AI Lead Score</SelectItem>
+                                                    <SelectItem value="update_stage">Update Deal Stage</SelectItem>
+                                                    <SelectItem value="assign_owner">Assign Owner</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        
+                                        {selectedNode.data.actionType === 'add_tag' && (
+                                            <div className="space-y-2">
+                                                <Label>Tag Name</Label>
+                                                <Input
+                                                    placeholder="e.g. VIP, Hot Lead"
+                                                    value={selectedNode.data.tag as string || ''}
+                                                    onChange={(e) => updateNodeData(selectedNode.id, { tag: e.target.value })}
+                                                />
+                                            </div>
+                                        )}
+                                        
+                                        <div className="space-y-2">
+                                            <Label>Step Label</Label>
+                                            <Input
+                                                placeholder="e.g. Mark as VIP"
+                                                value={selectedNode.data.label as string || ''}
+                                                onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <Button
                                     variant="destructive"
                                     className="w-full gap-2 mt-8"

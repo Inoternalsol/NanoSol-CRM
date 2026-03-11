@@ -85,6 +85,7 @@ export {
     useUpdateApiKeys,
     useIntegrations,
     useSyncCalendar,
+    useUpdatePassword,
 } from "./use-settings";
 
 // Automation Rules

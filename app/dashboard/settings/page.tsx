@@ -8,11 +8,12 @@ import {
     Palette,
     Shield,
     Bell,
-    Database,
     Key,
     Code,
     Globe,
     Calendar,
+    Phone,
+    Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar } from "@/hooks/use-data";
+import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar, useUpdatePassword } from "@/hooks/use-data";
 import { EmailAccountManager } from "@/components/settings/email-account-manager";
 import { SipAccountManager } from "@/components/settings/sip-account-manager";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -53,6 +54,7 @@ function SettingsContent() {
     const { trigger: updateApiKeys, isMutating: isUpdatingApiKeys } = useUpdateApiKeys();
     const { data: integrations } = useIntegrations(profile?.id || null);
     const { trigger: syncCalendar, isMutating: isSyncing } = useSyncCalendar();
+    const { trigger: updatePassword, isMutating: isUpdatingPassword } = useUpdatePassword();
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -100,6 +102,25 @@ function SettingsContent() {
         }
     });
 
+    // Notifications Form
+    const notificationForm = useForm({
+        defaultValues: {
+            email: profile?.notification_preferences?.email ?? true,
+            leads: profile?.notification_preferences?.leads ?? true,
+            tasks: profile?.notification_preferences?.tasks ?? true,
+            deals: profile?.notification_preferences?.deals ?? true,
+            missed_calls: profile?.notification_preferences?.missed_calls ?? false,
+        }
+    });
+
+    // Password Form
+    const passwordForm = useForm({
+        defaultValues: {
+            new_password: "",
+            confirm_password: "",
+        }
+    });
+
     const colorPreviewRef = useRef<HTMLDivElement>(null);
     const watchedPrimaryColor = useWatch({
         control: orgForm.control,
@@ -117,6 +138,7 @@ function SettingsContent() {
     const profileInitialized = useRef(false);
     const orgInitialized = useRef(false);
     const apiKeysInitialized = useRef(false);
+    const notificationsInitialized = useRef(false);
 
     // Init forms when data first loads
     useEffect(() => {
@@ -133,8 +155,6 @@ function SettingsContent() {
         }
     }, [org, orgForm]);
 
-
-
     useEffect(() => {
         if (apiKeys && !apiKeysInitialized.current) {
             apiKeysForm.reset({
@@ -147,6 +167,19 @@ function SettingsContent() {
             apiKeysInitialized.current = true;
         }
     }, [apiKeys, apiKeysForm]);
+
+    useEffect(() => {
+        if (profile?.notification_preferences && !notificationsInitialized.current) {
+            notificationForm.reset({
+                email: profile.notification_preferences.email ?? true,
+                leads: profile.notification_preferences.leads ?? true,
+                tasks: profile.notification_preferences.tasks ?? true,
+                deals: profile.notification_preferences.deals ?? true,
+                missed_calls: profile.notification_preferences.missed_calls ?? false,
+            });
+            notificationsInitialized.current = true;
+        }
+    }, [profile, notificationForm]);
 
 
     // We do NOT block rendering on loading, because it unmounts the component and resets refs.
@@ -185,6 +218,18 @@ function SettingsContent() {
         }
     };
 
+    const onNotificationSubmit = async (data: Record<string, boolean>) => {
+        try {
+            await updateProfile({ 
+                id: profile.id, 
+                updates: { notification_preferences: data } 
+            });
+            toast.success("Notification preferences saved");
+        } catch {
+            toast.error("Failed to save preferences");
+        }
+    };
+
 
 
     const onApiKeysSubmit = async (data: { openai_key: string; gemini_key: string; qwen_key: string; kimi_key: string; active_provider: AIProvider }) => {
@@ -206,6 +251,25 @@ function SettingsContent() {
         }
     };
 
+    const onPasswordSubmit = async (data: Record<string, string>) => {
+        if (data.new_password !== data.confirm_password) {
+            toast.error("Passwords do not match");
+            return;
+        }
+        if (data.new_password.length < 6) {
+            toast.error("Password must be at least 6 characters");
+            return;
+        }
+        try {
+            await updatePassword(data.new_password);
+            toast.success("Password updated successfully");
+            passwordForm.reset();
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Failed to update password";
+            toast.error(message);
+        }
+    };
+
 
     return (
         <motion.div
@@ -222,17 +286,16 @@ function SettingsContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6 mb-8">
-                    <TabsTrigger value="profile">Profile</TabsTrigger>
-                    {isAdmin && <TabsTrigger value="organization">Organization</TabsTrigger>}
-                    <TabsTrigger value="integrations">Integrations</TabsTrigger>
-                    {isAdmin && <TabsTrigger value="developer">Developer</TabsTrigger>}
-                    <TabsTrigger value="notifications">Notifications</TabsTrigger>
-                    <TabsTrigger value="security">Security</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 mb-8">
+                    <TabsTrigger value="general">General</TabsTrigger>
+                    <TabsTrigger value="team">Team</TabsTrigger>
+                    <TabsTrigger value="communications">Communications</TabsTrigger>
+                    <TabsTrigger value="integrations">Integrations & AI</TabsTrigger>
+                    <TabsTrigger value="security">Security & Notifications</TabsTrigger>
                 </TabsList>
 
-                {/* Profile Settings */}
-                <TabsContent value="profile">
+                {/* General Settings: Profile + Organization */}
+                <TabsContent value="general" className="space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -262,16 +325,13 @@ function SettingsContent() {
                                 </div>
                                 <Button type="submit" disabled={isUpdatingProfile}>
                                     {isUpdatingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Save Changes
+                                    Save Profile
                                 </Button>
                             </form>
                         </CardContent>
                     </Card>
-                </TabsContent>
 
-                {/* Organization Settings - Admin Only */}
-                {isAdmin && (
-                    <TabsContent value="organization">
+                    {isAdmin && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -279,7 +339,7 @@ function SettingsContent() {
                                     Organization Settings
                                 </CardTitle>
                                 <CardDescription>
-                                    Configure your organization&apos;s branding and preferences
+                                    Configure your organization&apos;s branding and data architecture
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
@@ -300,101 +360,171 @@ function SettingsContent() {
                                         </div>
                                     </div>
 
-                                    <Separator />
-
-                                    <div>
-                                        <h4 className="font-medium mb-4 flex items-center gap-2">
-                                            <Palette className="h-4 w-4" />
-                                            Branding
+                                    <div className="pt-4 border-t">
+                                        <h4 className="font-semibold mb-4 flex items-center gap-2">
+                                            <Palette className="h-4 w-4 text-primary" />
+                                            Branding & Identity
                                         </h4>
-                                        <div className="grid gap-4 sm:grid-cols-2">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="primary_color">Primary Color</Label>
-                                                <div className="flex gap-2">
-                                                    <Input id="primary_color" {...orgForm.register("primary_color")} />
-                                                    <div
-                                                        ref={colorPreviewRef}
-                                                        className="w-10 h-10 rounded-md border"
-                                                    />
+                                        <div className="grid gap-6 sm:grid-cols-2">
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="primary_color">Primary Brand Color</Label>
+                                                    <div className="flex gap-3">
+                                                        <Input id="primary_color" {...orgForm.register("primary_color")} className="font-mono" />
+                                                        <div
+                                                            ref={colorPreviewRef}
+                                                            className="w-10 h-10 rounded-xl border-2 border-background shadow-inner shrink-0"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="logo_url">Logo Image URL</Label>
+                                                    <Input id="logo_url" {...orgForm.register("logo_url")} placeholder="https://..." />
                                                 </div>
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="logo_url">Logo URL</Label>
-                                                <Input id="logo_url" {...orgForm.register("logo_url")} placeholder="https://..." />
+
+                                            <div className="bg-muted/30 rounded-2xl p-6 border border-white/5 flex flex-col items-center justify-center text-center">
+                                                {orgForm.watch("logo_url") ? (
+                                                    <img 
+                                                        src={orgForm.watch("logo_url")} 
+                                                        alt="Logo Preview" 
+                                                        className="h-16 w-auto object-contain mb-4 rounded-lg"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Invalid+URL';
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
+                                                        <Building2 className="h-8 w-8 text-primary" />
+                                                    </div>
+                                                )}
+                                                <p className="text-sm font-medium">Visual Identity Preview</p>
+                                                <p className="text-xs text-muted-foreground mt-1">Updates in real-time as you change branding settings.</p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <Button type="submit" disabled={isUpdatingOrg}>
+                                    <Button type="submit" disabled={isUpdatingOrg} className="w-full sm:w-auto">
                                         {isUpdatingOrg && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Save Organization
+                                        Update Organization
                                     </Button>
                                 </form>
-
-                                <Separator />
-
-                                <div className="space-y-4">
-                                    <h4 className="font-medium flex items-center gap-2">
-                                        <Database className="h-4 w-4" />
-                                        Data Architecture
-                                    </h4>
-                                    <div className="rounded-lg border p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="space-y-1">
-                                                <h4 className="text-sm font-medium">Sales Pipelines</h4>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Manage your sales stages and create multiple custom pipelines.
-                                                </p>
-                                            </div>
-                                            <Button asChild variant="outline">
-                                                <Link href="/dashboard/settings/pipelines">
-                                                    Manage Pipelines
-                                                </Link>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
                             </CardContent>
                         </Card>
-                    </TabsContent>
-                )}
-                {/* Developer - Admin Only */}
-                {isAdmin && (
-                    <TabsContent value="developer">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Code className="h-5 w-5" />
-                                    Developer Settings
-                                </CardTitle>
-                                <CardDescription>
-                                    Manage API keys and developer access
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="rounded-lg border p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-1">
-                                            <h4 className="text-sm font-medium">Public API Access</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                Generate API keys for external integrations and custom apps.
-                                            </p>
-                                        </div>
-                                        <Button asChild>
-                                            <Link href="/dashboard/settings/developer">
-                                                Manage Keys
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                )}
+                    )}
+                </TabsContent>
 
-                {/* Integrations */}
+                {/* Team Tab */}
+                <TabsContent value="team">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <User className="h-5 w-5" />
+                                Team Management
+                            </CardTitle>
+                            <CardDescription>
+                                Manage your staff access, roles, and collaboration settings.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-2">
+                            <div className="bg-primary/5 border border-primary/10 rounded-2xl p-8 text-center flex flex-col items-center">
+                                <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                                    <User className="h-8 w-8 text-primary" />
+                                </div>
+                                <h3 className="text-lg font-bold">Manage Your Workspace</h3>
+                                <p className="text-muted-foreground max-w-sm mx-auto mt-2 mb-6">
+                                    You can invite agents, managers, and admins to your organization from the dedicated team management module.
+                                </p>
+                                <Button asChild size="lg" className="rounded-xl px-10 shadow-lg shadow-primary/20">
+                                    <Link href="/dashboard/team">
+                                        Go to Team Management
+                                    </Link>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Communications - SIP & SMTP */}
+                <TabsContent value="communications" className="space-y-6">
+                    {profile && (
+                        <SipAccountManager userId={profile.id} orgId={profile.organization_id} />
+                    )}
+                    {isAdmin && (
+                        <EmailAccountManager orgId={profile.organization_id} />
+                    )}
+                </TabsContent>
+                {/* Integrations & AI */}
                 <TabsContent value="integrations">
                     <div className="space-y-6">
+                        {/* Integration Status Overview */}
+                        <div className="grid gap-4 md:grid-cols-3">
+                            <Card className="bg-muted/30">
+                                <CardContent className="pt-6">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">SIP Connection</p>
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                                                <span className="text-lg font-bold">Active</span>
+                                            </div>
+                                        </div>
+                                        <Phone className="h-8 w-8 text-primary/20" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            <Card className="bg-muted/30">
+                                <CardContent className="pt-6">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">SMTP Service</p>
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-2 w-2 rounded-full bg-green-500" />
+                                                <span className="text-lg font-bold">Configured</span>
+                                            </div>
+                                        </div>
+                                        <Mail className="h-8 w-8 text-primary/20" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            <Card className="bg-muted/30">
+                                <CardContent className="pt-6">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium text-muted-foreground">AI Provider</p>
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                                                <span className="text-lg font-bold">{apiKeys?.active_provider ? apiKeys.active_provider.toUpperCase() : 'NONE'}</span>
+                                            </div>
+                                        </div>
+                                        <Key className="h-8 w-8 text-primary/20" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Developer - Admin Only */}
+                        {isAdmin && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Code className="h-5 w-5" />
+                                        Developer Settings
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Manage API keys for external integrations and custom apps.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Button asChild variant="outline" className="w-full">
+                                        <Link href="/dashboard/settings/developer">
+                                            Manage Public API Keys
+                                        </Link>
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
+
                         {/* Web Forms Card */}
                         <Card>
                             <CardHeader>
@@ -406,22 +536,12 @@ function SettingsContent() {
                                     Create and manage web-to-lead forms for your website
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="rounded-lg border p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-1">
-                                            <h4 className="text-sm font-medium">Lead Capture Forms</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                Create HTML forms to collect leads directly into your CRM.
-                                            </p>
-                                        </div>
-                                        <Button asChild variant="outline">
-                                            <Link href="/dashboard/settings/forms">
-                                                Manage Forms
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                </div>
+                            <CardContent>
+                                <Button asChild variant="outline" className="w-full">
+                                    <Link href="/dashboard/settings/forms">
+                                        Manage Lead Capture Forms
+                                    </Link>
+                                </Button>
                             </CardContent>
                         </Card>
 
@@ -596,139 +716,101 @@ function SettingsContent() {
                     </div>
                 </TabsContent>
 
-                {/* Notifications */}
-                <TabsContent value="notifications">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Bell className="h-5 w-5" />
-                                Notification Preferences
-                            </CardTitle>
-                            <CardDescription>
-                                Choose what notifications you want to receive
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium">Email Notifications</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Receive email updates for important events
-                                        </p>
-                                    </div>
-                                    <Switch defaultChecked />
-                                </div>
-                                <Separator />
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium">New Lead Alerts</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Get notified when new leads are created
-                                        </p>
-                                    </div>
-                                    <Switch defaultChecked />
-                                </div>
-                                <Separator />
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium">Deal Updates</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Notifications for deal stage changes
-                                        </p>
-                                    </div>
-                                    <Switch defaultChecked />
-                                </div>
-                                <Separator />
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium">Task Reminders</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Reminders for upcoming and overdue tasks
-                                        </p>
-                                    </div>
-                                    <Switch defaultChecked />
-                                </div>
-                                <Separator />
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium">Missed Call Alerts</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Get notified about missed incoming calls
-                                        </p>
-                                    </div>
-                                    <Switch />
-                                </div>
-                            </div>
-                            <Button onClick={() => toast.success("Notification preferences saved")}>
-                                Save Preferences
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Security */}
+                {/* Security & Notifications */}
                 <TabsContent value="security">
-                    <div className="space-y-6">
+                    <div className="grid gap-6 lg:grid-cols-2">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Shield className="h-5 w-5" />
-                                    Security Settings
+                                    <Bell className="h-5 w-5" />
+                                    Notifications
                                 </CardTitle>
                                 <CardDescription>
-                                    Manage your account security
+                                    Manage your alert preferences
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="currentPass">Current Password</Label>
-                                        <Input id="currentPass" type="password" />
+                            <CardContent>
+                                <form onSubmit={notificationForm.handleSubmit(onNotificationSubmit)} className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="notify_email">Email Notifications</Label>
+                                        <Switch 
+                                            id="notify_email"
+                                            checked={!!notificationForm.watch("email")}
+                                            onCheckedChange={(checked: boolean) => notificationForm.setValue("email", checked)}
+                                        />
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="newPass">New Password</Label>
-                                        <Input id="newPass" type="password" />
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="notify_leads">New Lead Alerts</Label>
+                                        <Switch 
+                                            id="notify_leads"
+                                            checked={!!notificationForm.watch("leads")}
+                                            onCheckedChange={(checked: boolean) => notificationForm.setValue("leads", checked)}
+                                        />
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="confirmPass">Confirm New Password</Label>
-                                        <Input id="confirmPass" type="password" />
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="notify_tasks">Task Reminders</Label>
+                                        <Switch 
+                                            id="notify_tasks"
+                                            checked={!!notificationForm.watch("tasks")}
+                                            onCheckedChange={(checked: boolean) => notificationForm.setValue("tasks", checked)}
+                                        />
                                     </div>
-                                </div>
-                                <Button onClick={() => toast.success("Password update feature coming soon")}>
-                                    Update Password
-                                </Button>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="notify_deals">Deal Updates</Label>
+                                        <Switch 
+                                            id="notify_deals"
+                                            checked={!!notificationForm.watch("deals")}
+                                            onCheckedChange={(checked: boolean) => notificationForm.setValue("deals", checked)}
+                                        />
+                                    </div>
+                                    <Button type="submit" className="w-full mt-4" variant="outline" disabled={isUpdatingProfile}>
+                                        {isUpdatingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Save Preferences
+                                    </Button>
+                                </form>
                             </CardContent>
                         </Card>
 
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Database className="h-5 w-5" />
-                                    Data Management
+                                    <Shield className="h-5 w-5" />
+                                    Account Security
                                 </CardTitle>
                                 <CardDescription>
-                                    Export or delete your data
+                                    Update password and manage security
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="flex items-center justify-between p-4 rounded-lg border">
-                                    <div>
-                                        <p className="font-medium">Export All Data</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Download all your CRM data as JSON/CSV
-                                        </p>
+                                <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="new_password">New Password</Label>
+                                        <Input 
+                                            id="new_password" 
+                                            type="password" 
+                                            {...passwordForm.register("new_password", { required: true, minLength: 6 })} 
+                                        />
                                     </div>
-                                    <Button variant="outline">Export</Button>
-                                </div>
-                                <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/50">
-                                    <div>
-                                        <p className="font-medium text-destructive">Delete Account</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Permanently delete your account and all data
-                                        </p>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="confirm_password">Confirm New Password</Label>
+                                        <Input 
+                                            id="confirm_password" 
+                                            type="password" 
+                                            {...passwordForm.register("confirm_password", { required: true })} 
+                                        />
                                     </div>
-                                    <Button variant="destructive">Delete</Button>
+                                    <Button type="submit" className="w-full" variant="outline" disabled={isUpdatingPassword}>
+                                        {isUpdatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Update Password
+                                    </Button>
+                                </form>
+                                <Separator />
+                                <div className="flex items-center justify-between text-destructive">
+                                    <div className="space-y-0.5">
+                                        <p className="text-sm font-medium">Delete Account</p>
+                                        <p className="text-xs opacity-70">Permanently remove all data</p>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">Delete</Button>
                                 </div>
                             </CardContent>
                         </Card>

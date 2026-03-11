@@ -1,7 +1,7 @@
 -- supabase/migrations/20260310000000_add_web_forms.sql
 
 CREATE TABLE IF NOT EXISTS public.web_forms (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
@@ -22,9 +22,11 @@ ALTER TABLE IF EXISTS public.web_forms
 
 ALTER TABLE public.web_forms ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Enable read access for public forms" ON public.web_forms;
 CREATE POLICY "Enable read access for public forms" ON public.web_forms
     FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Enable all access for org users" ON public.web_forms;
 CREATE POLICY "Enable all access for org users" ON public.web_forms
     FOR ALL USING (
         auth.uid() IN (

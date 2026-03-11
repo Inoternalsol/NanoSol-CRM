@@ -13,7 +13,7 @@ SET search_path TO public, extensions, auth;
 -- ORGANIZATIONS
 -- ============================================
 CREATE TABLE IF NOT EXISTS organizations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL, -- subdomain identifier
   logo_url TEXT,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS organizations (
 -- PROFILES (extends Supabase auth.users)
 -- ============================================
 CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- CONTACTS
 -- ============================================
 CREATE TABLE IF NOT EXISTS contacts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
   last_name TEXT,
@@ -79,7 +79,7 @@ CREATE INDEX IF NOT EXISTS idx_contacts_tags ON contacts USING GIN(tags);
 -- PIPELINES & DEALS
 -- ============================================
 CREATE TABLE IF NOT EXISTS pipelines (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   stages JSONB NOT NULL DEFAULT '[]', -- Array of {id, name, order, color}
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS pipelines (
 );
 
 CREATE TABLE IF NOT EXISTS deals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
   pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
@@ -123,7 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage);
 -- ACTIVITIES (Unified Timeline)
 -- ============================================
 CREATE TABLE IF NOT EXISTS activities (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
   deal_id UUID REFERENCES deals(id) ON DELETE CASCADE,
@@ -145,7 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_activities_created ON activities(created_at DESC)
 -- TASKS
 -- ============================================
 CREATE TABLE IF NOT EXISTS tasks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
   deal_id UUID REFERENCES deals(id) ON DELETE SET NULL,
@@ -167,7 +167,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);
 -- CALENDAR EVENTS
 -- ============================================
 CREATE TABLE IF NOT EXISTS calendar_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
@@ -187,7 +187,7 @@ CREATE INDEX IF NOT EXISTS idx_events_time ON calendar_events(start_time, end_ti
 -- SIP PROFILES (Encrypted)
 -- ============================================
 CREATE TABLE IF NOT EXISTS sip_profiles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   display_name TEXT NOT NULL,
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS sip_profiles (
 -- SMTP CONFIGURATIONS
 -- ============================================
 CREATE TABLE IF NOT EXISTS smtp_configs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   host TEXT NOT NULL,
   port INTEGER NOT NULL,
@@ -220,7 +220,7 @@ CREATE TABLE IF NOT EXISTS smtp_configs (
 -- EMAIL TEMPLATES
 -- ============================================
 CREATE TABLE IF NOT EXISTS email_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   subject TEXT NOT NULL,
@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS email_templates (
 -- EMAIL SEQUENCES
 -- ============================================
 CREATE TABLE IF NOT EXISTS email_sequences (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   steps JSONB NOT NULL DEFAULT '[]', -- Array of {id, order, delay_days, template_id, subject_override}
@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS email_sequences (
 );
 
 CREATE TABLE IF NOT EXISTS sequence_enrollments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence_id UUID NOT NULL REFERENCES email_sequences(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
   current_step INTEGER DEFAULT 0,
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS sequence_enrollments (
 -- AUTOMATION RULES
 -- ============================================
 CREATE TABLE IF NOT EXISTS automation_rules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   trigger_type TEXT NOT NULL, -- 'lead_created', 'deal_stage_changed', 'email_opened', etc.
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS automation_rules (
 -- FILES/NOTES
 -- ============================================
 CREATE TABLE IF NOT EXISTS files (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
   deal_id UUID REFERENCES deals(id) ON DELETE CASCADE,
@@ -284,7 +284,7 @@ CREATE TABLE IF NOT EXISTS files (
 );
 
 CREATE TABLE IF NOT EXISTS notes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
   deal_id UUID REFERENCES deals(id) ON DELETE CASCADE,

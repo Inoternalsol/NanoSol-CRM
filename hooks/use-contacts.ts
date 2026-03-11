@@ -215,14 +215,18 @@ export function useCreateContact() {
     return useSWRMutation(
         "contacts",
         async (_, { arg }: { arg: Omit<Contact, "id" | "created_at" | "updated_at"> }) => {
-            const supabase = createClient();
-            const { data, error } = await supabase
-                .from("contacts")
-                .insert([arg])
-                .select()
-                .single();
-            if (error) throw error;
-            return data;
+            const res = await fetch('/api/internal/contacts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(arg)
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || "Failed to create contact");
+            }
+
+            return res.json();
         },
         {
             revalidate: true,
