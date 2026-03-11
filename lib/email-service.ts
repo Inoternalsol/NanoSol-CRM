@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer';
 import { decrypt } from '@/lib/crypto';
 import { injectTracking } from '@/lib/email-tracking';
 
-const supabaseAdmin = createClient(
+const getSupabaseAdmin = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
@@ -30,7 +30,7 @@ export async function sendEmail({
 }: SendEmailParams) {
     try {
         // 1. Fetch SMTP Config
-        let smtpQuery = supabaseAdmin
+        let smtpQuery = getSupabaseAdmin()
             .from('smtp_configs')
             .select('*')
             .eq('organization_id', organizationId);
@@ -52,7 +52,7 @@ export async function sendEmail({
         let finalBody = bodyHtml || '';
 
         if (templateId) {
-            const { data: template, error: templateError } = await supabaseAdmin
+            const { data: template, error: templateError } = await getSupabaseAdmin()
                 .from('email_templates')
                 .select('*')
                 .eq('id', templateId)
@@ -77,7 +77,7 @@ export async function sendEmail({
         const password = decrypt(account.smtp_pass_encrypted);
 
         // 4. Pre-log email for tracking ID
-        const { data: emailRecord, error: emailError } = await supabaseAdmin
+        const { data: emailRecord, error: emailError } = await getSupabaseAdmin()
             .from('emails')
             .insert({
                 account_id: account.id,
@@ -100,7 +100,7 @@ export async function sendEmail({
         const trackedBody = injectTracking(finalBody, emailRecord.id, baseUrl);
 
         // Update record with tracked body
-        await supabaseAdmin.from('emails').update({ body_html: trackedBody }).eq('id', emailRecord.id);
+        await getSupabaseAdmin().from('emails').update({ body_html: trackedBody }).eq('id', emailRecord.id);
 
         // 6. Send via Nodemailer
         const transporter = nodemailer.createTransport({
@@ -124,7 +124,7 @@ export async function sendEmail({
         });
 
         // 7. Log Activity
-        await supabaseAdmin.from('activities').insert({
+        await getSupabaseAdmin().from('activities').insert({
             organization_id: organizationId,
             type: 'email',
             title: `Sent Email: ${finalSubject}`,

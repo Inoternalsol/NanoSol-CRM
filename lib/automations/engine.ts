@@ -3,7 +3,7 @@ import { Workflow, Contact } from "@/types";
 import { Node as RFNode, Edge } from "reactflow";
 import { sendEmail } from "@/lib/email-service";
 
-const supabaseAdmin = createClient(
+const getSupabaseAdmin = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
@@ -25,7 +25,7 @@ export async function processWorkflowRun(runId: string, depth = 0) {
     if (depth > 5) return; // Prevent infinite loops
 
     // 1. Fetch Run and Workflow
-    const { data: run, error: runError } = await supabaseAdmin
+    const { data: run, error: runError } = await getSupabaseAdmin()
         .from('workflow_runs')
         .select(`
             *,
@@ -126,7 +126,7 @@ export async function processWorkflowRun(runId: string, depth = 0) {
 }
 
 async function logExecution(run: WorkflowRun | null, nodeId: string | null, level: string, message: string) {
-    await supabaseAdmin.from('workflow_logs').insert({
+    await getSupabaseAdmin().from('workflow_logs').insert({
         organization_id: run?.organization_id,
         workflow_id: run?.workflow_id,
         run_id: run?.id,
@@ -137,7 +137,7 @@ async function logExecution(run: WorkflowRun | null, nodeId: string | null, leve
 }
 
 async function markRunStatus(runId: string, status: string, updates: Record<string, any> = {}) {
-    await supabaseAdmin.from('workflow_runs').update({
+    await getSupabaseAdmin().from('workflow_runs').update({
         status,
         ...updates,
         last_executed_at: new Date().toISOString()
@@ -145,7 +145,7 @@ async function markRunStatus(runId: string, status: string, updates: Record<stri
 }
 
 async function advanceWorkflow(runId: string, nodeId: string, depth: number) {
-    await supabaseAdmin.from('workflow_runs').update({
+    await getSupabaseAdmin().from('workflow_runs').update({
         current_node_id: nodeId,
         status: 'running',
         next_execution_at: new Date().toISOString()
@@ -207,20 +207,20 @@ async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
         const tag = node.data.tag;
         const currentTags = run.contact.tags || [];
         if (!currentTags.includes(tag)) {
-            await supabaseAdmin.from('contacts')
+            await getSupabaseAdmin().from('contacts')
                 .update({ tags: [...currentTags, tag] })
                 .eq('id', run.contact_id);
         }
     } else if (actionType === 'calculate_score') {
         // Trigger the scoring logic
-        const { data: activities } = await supabaseAdmin
+        const { data: activities } = await getSupabaseAdmin()
             .from('activities')
             .select('*')
             .eq('contact_id', run.contact_id)
             .order('created_at', { ascending: false })
             .limit(20);
 
-        const { data: apiKeys } = await supabaseAdmin
+        const { data: apiKeys } = await getSupabaseAdmin()
             .from('api_keys')
             .select('*')
             .eq('organization_id', run.organization_id)
@@ -230,7 +230,7 @@ async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
             const { generateContactScore } = await import('@/lib/ai-services');
             const result = await generateContactScore(run.contact as any, activities || [], apiKeys as any);
             if (result) {
-                await supabaseAdmin.from('contacts')
+                await getSupabaseAdmin().from('contacts')
                     .update({
                         lead_score: result.score,
                         score_reason: result.reason
@@ -244,7 +244,7 @@ async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
 
 export async function evaluateTriggers(triggerType: string, organizationId: string, payload: { contactId: string;[key: string]: any }) {
     // 1. Fetch active workflows for this trigger
-    const { data: workflows } = await supabaseAdmin
+    const { data: workflows } = await getSupabaseAdmin()
         .from('workflows')
         .select('*')
         .eq('organization_id', organizationId)
@@ -264,7 +264,7 @@ export async function evaluateTriggers(triggerType: string, organizationId: stri
         }
 
         // 2. Create Workflow Run
-        const { data: run, error: runError } = await supabaseAdmin
+        const { data: run, error: runError } = await getSupabaseAdmin()
             .from('workflow_runs')
             .insert({
                 organization_id: organizationId,
