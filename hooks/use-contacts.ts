@@ -35,10 +35,11 @@ export interface PaginatedResult<T> {
 
 const DEFAULT_STATUSES: Omit<ContactStatus, "id" | "organization_id" | "created_at">[] = [
     { name: "new", label: "New", color: "gray", order: 1 },
-    { name: "contacted", label: "Contacted", color: "blue", order: 2 },
-    { name: "qualified", label: "Qualified", color: "green", order: 3 },
-    { name: "unqualified", label: "Unqualified", color: "red", order: 4 },
-    { name: "customer", label: "Customer", color: "purple", order: 5 },
+    { name: "not_interested", label: "Not interested", color: "red", order: 2 },
+    { name: "call_back", label: "Call back", color: "blue", order: 3 },
+    { name: "no_answer", label: "No Answer", color: "orange", order: 4 },
+    { name: "not_potential", label: "Not potential", color: "slate", order: 5 },
+    { name: "voice_message", label: "Voice message", color: "purple", order: 6 },
 ];
 
 // ============================================
@@ -118,17 +119,23 @@ async function fetchContactStatuses(): Promise<ContactStatus[]> {
         .select("*")
         .order("order", { ascending: true });
 
+    const mapDefaults = () => DEFAULT_STATUSES.map((s, i) => ({
+        ...s,
+        id: `default-${i}`,
+        organization_id: "default",
+        created_at: new Date().toISOString()
+    })) as ContactStatus[];
+
     if (error) {
         console.warn("Could not fetch custom statuses, using defaults:", error.message);
-        return DEFAULT_STATUSES.map((s, i) => ({
-            ...s,
-            id: `default-${i}`,
-            organization_id: "default",
-            created_at: new Date().toISOString()
-        })) as ContactStatus[];
+        return mapDefaults();
     }
 
-    return data || [];
+    if (!data || data.length === 0) {
+        return mapDefaults();
+    }
+
+    return data;
 }
 
 async function fetchContactCount(profileId?: string, isAdmin?: boolean): Promise<number> {

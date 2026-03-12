@@ -18,6 +18,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useContactStatuses } from "@/hooks/use-data";
 
 export interface ContactFilterValues {
     search: string;
@@ -35,6 +36,7 @@ interface ContactFiltersProps {
 
 export function ContactFilters({ onFilterChange, currentFilters }: ContactFiltersProps) {
     const [tempFilters, setTempFilters] = useState<ContactFilterValues>(currentFilters);
+    const { data: statuses } = useContactStatuses();
 
     const handleApply = () => {
         onFilterChange(tempFilters);
@@ -124,11 +126,11 @@ export function ContactFilters({ onFilterChange, currentFilters }: ContactFilter
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Statuses</SelectItem>
-                                    <SelectItem value="new">New</SelectItem>
-                                    <SelectItem value="contacted">Contacted</SelectItem>
-                                    <SelectItem value="qualified">Qualified</SelectItem>
-                                    <SelectItem value="unqualified">Unqualified</SelectItem>
-                                    <SelectItem value="customer">Customer</SelectItem>
+                                    {statuses?.map((s) => (
+                                        <SelectItem key={s.id} value={s.name}>
+                                            {s.label}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
