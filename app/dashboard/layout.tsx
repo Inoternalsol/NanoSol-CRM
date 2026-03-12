@@ -28,7 +28,7 @@ export default function DashboardLayout({
             <CopilotProvider>
                 <PresenceProvider>
                     <OrgBrandingProvider>
-                        <div className="min-h-screen bg-background relative overflow-hidden">
+                        <div className="min-h-screen bg-background relative overflow-x-clip">
                             {/* Global Background Layer */}
                             <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-500/5 via-background to-background pointer-events-none" />
 

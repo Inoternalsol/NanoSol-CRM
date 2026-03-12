@@ -115,7 +115,9 @@ describe('sleep', () => {
 });
 
 describe('debounce', () => {
-    jest.useFakeTimers();
+    beforeEach(() => {
+        jest.useFakeTimers();
+    });
 
     it('should debounce function calls', () => {
         const mockFn = jest.fn();
@@ -144,5 +146,6 @@ describe('debounce', () => {
 
     afterEach(() => {
         jest.clearAllTimers();
+        jest.useRealTimers();
     });
 });

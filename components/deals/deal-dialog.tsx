@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
     Dialog,
@@ -20,9 +20,24 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import { toast } from "sonner";
 import { useCreateDeal, useUpdateDeal, useContacts, useActiveProfile } from "@/hooks/use-data";
 import type { Deal } from "@/types";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface DealFormData {
     name: string;
@@ -58,6 +73,8 @@ export function DealDialog({
     const isAgent = activeProfile?.role === "agent";
     const { trigger: createDeal, isMutating: isCreating } = useCreateDeal();
     const { trigger: updateDeal, isMutating: isUpdating } = useUpdateDeal();
+
+    const [contactPopoverOpen, setContactPopoverOpen] = useState(false);
 
     const {
         register,
@@ -118,6 +135,14 @@ export function DealDialog({
         name: "contact_id",
     });
 
+    // Derive the display name for the selected contact
+    const selectedContactLabel = useMemo(() => {
+        if (!watchedContactId || watchedContactId === "none") return "No contact";
+        const contact = contacts?.find((c) => c.id === watchedContactId);
+        if (!contact) return "No contact";
+        return `${contact.first_name} ${contact.last_name || ""}${contact.company ? ` - ${contact.company}` : ""}`;
+    }, [watchedContactId, contacts]);
+
     const onSubmit = async (data: DealFormData) => {
         try {
             if (isEditing && deal) {
@@ -148,9 +173,9 @@ export function DealDialog({
             reset();
             onOpenChange(false);
             onSuccess?.();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error saving deal:", error);
-            const errorMessage = error?.message || error?.code || "Failed to save deal";
+            const errorMessage = error instanceof Error ? error.message : "Failed to save deal";
             toast.error(`Error: ${errorMessage}`);
         }
     };
@@ -167,7 +192,7 @@ export function DealDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
                     <div className="space-y-2">
                         <Label htmlFor="name">Deal Name *</Label>
                         <Input
@@ -224,24 +249,68 @@ export function DealDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="contact_id">Contact</Label>
-                        <Select
-                            value={watchedContactId}
-                            onValueChange={(value) => setValue("contact_id", value)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select contact (optional)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {!isAgent && <SelectItem value="none">No contact</SelectItem>}
-                                {contacts?.map((contact) => (
-                                    <SelectItem key={contact.id} value={contact.id}>
-                                        {contact.first_name} {contact.last_name}
-                                        {contact.company && ` - ${contact.company}`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Label>Contact</Label>
+                        <Popover open={contactPopoverOpen} onOpenChange={setContactPopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={contactPopoverOpen}
+                                    className="w-full justify-between font-normal"
+                                >
+                                    <span className="truncate">{selectedContactLabel}</span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search contacts..." />
+                                    <CommandList>
+                                        <CommandEmpty>No contacts found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {!isAgent && (
+                                                <CommandItem
+                                                    value="none"
+                                                    onSelect={() => {
+                                                        setValue("contact_id", "none");
+                                                        setContactPopoverOpen(false);
+                                                    }}
+                                                >
+                                                    <Check
+                                                        className={cn(
+                                                            "mr-2 h-4 w-4",
+                                                            watchedContactId === "none" ? "opacity-100" : "opacity-0"
+                                                        )}
+                                                    />
+                                                    No contact
+                                                </CommandItem>
+                                            )}
+                                            {contacts?.map((contact) => {
+                                                const label = `${contact.first_name} ${contact.last_name || ""}${contact.company ? ` - ${contact.company}` : ""}`;
+                                                return (
+                                                    <CommandItem
+                                                        key={contact.id}
+                                                        value={label}
+                                                        onSelect={() => {
+                                                            setValue("contact_id", contact.id);
+                                                            setContactPopoverOpen(false);
+                                                        }}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                watchedContactId === contact.id ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                        />
+                                                        {label}
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                         {isAgent && watchedContactId === "none" && (
                             <p className="text-xs text-destructive">Agents must link a contact to create a deal.</p>
                         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Bell, Moon, Sun, User, LogOut, Command, Menu } from "lucide-react";
+import { Search, Bell, Moon, Sun, User, LogOut, Command, Menu, CheckCircle, AtSign, AlertTriangle, Settings, Target } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import { cn } from "@/lib/utils";
 import { useNotifications } from "@/hooks/use-notifications";
 
 export function Topbar() {
@@ -122,30 +123,53 @@ export function Topbar() {
                     <DropdownMenuSeparator />
                     <div className="max-h-[300px] overflow-y-auto">
                         {notifications.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-muted-foreground">
-                                No notifications
+                            <div className="p-8 text-center flex flex-col items-center gap-2">
+                                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                    <Bell className="h-5 w-5 text-muted-foreground/50" />
+                                </div>
+                                <p className="text-xs text-muted-foreground">No new notifications</p>
                             </div>
                         ) : (
-                            notifications.map((n) => (
-                                <DropdownMenuItem
-                                    key={n.id}
-                                    className={`flex flex-col items-start p-4 gap-1 cursor-pointer ${!n.read ? 'bg-muted/50' : ''}`}
-                                    onClick={() => {
-                                        markAsRead(n.id);
-                                        if (n.link_url) router.push(n.link_url);
-                                    }}
-                                >
-                                    <div className="flex w-full justify-between items-center px-1">
-                                        <span className={`text-sm ${!n.read ? 'font-semibold' : ''}`}>{n.title}</span>
-                                        <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
-                                            {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">
-                                        {n.message}
-                                    </p>
-                                </DropdownMenuItem>
-                            ))
+                            notifications.map((n) => {
+                                const Icon = {
+                                    lead: Target,
+                                    system: Settings,
+                                    task: CheckCircle,
+                                    mention: AtSign,
+                                    warning: AlertTriangle
+                                }[n.type] || Bell;
+
+                                return (
+                                    <DropdownMenuItem
+                                        key={n.id}
+                                        className={`flex items-start p-4 gap-3 cursor-pointer border-b last:border-0 transition-colors ${!n.read ? 'bg-primary/5' : ''}`}
+                                        onClick={() => {
+                                            markAsRead(n.id);
+                                            if (n.link_url) router.push(n.link_url);
+                                        }}
+                                    >
+                                        <div className={cn(
+                                            "mt-0.5 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                                            !n.read ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                                        )}>
+                                            <Icon className="h-4 w-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                <span className={cn("text-sm truncate", !n.read ? "font-semibold" : "font-medium")}>
+                                                    {n.title}
+                                                </span>
+                                                <span className="text-[10px] text-muted-foreground shrink-0">
+                                                    {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground line-clamp-2">
+                                                {n.message}
+                                            </p>
+                                        </div>
+                                    </DropdownMenuItem>
+                                );
+                            })
                         )}
                     </div>
                     <DropdownMenuSeparator />

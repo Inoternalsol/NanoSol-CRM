@@ -70,8 +70,8 @@ export async function POST(request: Request) {
         const contactData: Record<string, any> = {
             organization_id: form.organization_id,
             tags: ["Web Lead", form.name],
+            source: form.source || "Web Form",
             custom_fields: {
-                source: form.source || "Web Form",
                 status: "New"
             }
         };

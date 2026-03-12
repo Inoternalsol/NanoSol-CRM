@@ -30,11 +30,13 @@ import { Separator } from "@/components/ui/separator";
 import { useEmailTemplates, useDeleteEmailTemplate, useEmailSequences, useActiveProfile, useDeleteEmailSequence, useUpdateEmailSequence, useSMTPConfigs } from "@/hooks/use-data";
 import { useEmails, useEmailBatchAction } from "@/hooks/use-email";
 import { useRealtime } from "@/hooks/use-realtime";
-import { TemplateDialog } from "@/components/email/template-dialog";
-import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
-import { SequenceDialog } from "@/components/email/sequence-dialog";
-import { SequenceEnrollmentsManager } from "@/components/email/sequence-enrollments-manager";
-import { EmailAnalytics } from "@/components/email/email-analytics";
+import dynamic from 'next/dynamic';
+
+const TemplateDialog = dynamic(() => import("@/components/email/template-dialog").then(mod => mod.TemplateDialog), { ssr: false });
+const EmailComposerDialog = dynamic(() => import("@/components/email/email-composer-dialog").then(mod => mod.EmailComposerDialog), { ssr: false });
+const SequenceDialog = dynamic(() => import("@/components/email/sequence-dialog").then(mod => mod.SequenceDialog), { ssr: false });
+const SequenceEnrollmentsManager = dynamic(() => import("@/components/email/sequence-enrollments-manager").then(mod => mod.SequenceEnrollmentsManager), { ssr: false });
+const EmailAnalytics = dynamic(() => import("@/components/email/email-analytics").then(mod => mod.EmailAnalytics), { ssr: false });
 import type { EmailTemplate, EmailSequence, Email } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";

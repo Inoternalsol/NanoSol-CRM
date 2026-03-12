@@ -235,3 +235,14 @@ export function useUpdatePassword() {
         return data;
     });
 }
+export function useDeleteUserAccountFinal() {
+    return useSWRMutation("auth-delete", async () => {
+        const res = await fetch("/api/auth/delete-account", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to delete account");
+        return data;
+    });
+}

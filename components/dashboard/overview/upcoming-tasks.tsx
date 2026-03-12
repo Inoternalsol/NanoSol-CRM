@@ -16,7 +16,7 @@ const item = {
 
 export function UpcomingTasks() {
     const { data: profile } = useActiveProfile();
-    const { data: tasks, isLoading } = useTasks("todo");
+    const { data: tasks, isLoading } = useTasks("pending");
 
     const isAdmin = profile?.role === "admin" || profile?.role === "manager";
     const myTasks = useMemo(() => isAdmin ? tasks : tasks?.filter((t: Task) => t.assigned_to?.id === profile?.id), [isAdmin, tasks, profile?.id]);

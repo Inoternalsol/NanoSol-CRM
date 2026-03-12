@@ -74,19 +74,8 @@ export {
 } from "./use-calls";
 
 // Settings (Profiles, Org, SIP, SMTP, API Keys)
-export {
-    useActiveProfile,
-    useProfiles,
-    useOrganization,
-    useUpdateProfile,
-    useDeleteProfile,
-    useUpdateOrganization,
-    useApiKeys,
-    useUpdateApiKeys,
-    useIntegrations,
-    useSyncCalendar,
-    useUpdatePassword,
-} from "./use-settings";
+export * from "./use-settings";
+
 
 // Automation Rules
 export {

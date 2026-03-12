@@ -37,6 +37,7 @@ export class SipService {
     private _isRegistered: Map<string, boolean> = new Map();
     private _isHangingUp: boolean = false;
     private _remoteStream: any = null;
+    private _simulationTimeouts: number[] = [];
 
     private constructor() { }
 
@@ -319,6 +320,11 @@ export class SipService {
                 this._isHangingUp = false;
             }
         }
+
+        // Clear simulation timeouts
+        this._simulationTimeouts.forEach(id => clearTimeout(id));
+        this._simulationTimeouts = [];
+
         useDialerStore.getState().endCall();
     }
 
@@ -489,14 +495,16 @@ export class SipService {
     private simulateCall() {
         const store = useDialerStore.getState();
         store.startCall();
-        setTimeout(() => {
+        const t1 = setTimeout(() => {
             if (store.callStatus === 'ended') return;
             store.setCallStatus("ringing");
-            setTimeout(() => {
+            const t2 = setTimeout(() => {
                 if (store.callStatus === 'ended') return;
                 store.setCallStatus("active");
             }, 2000);
+            this._simulationTimeouts.push(t2 as unknown as number);
         }, 1000);
+        this._simulationTimeouts.push(t1 as unknown as number);
     }
 
     public simulateIncomingCall(from: string) {

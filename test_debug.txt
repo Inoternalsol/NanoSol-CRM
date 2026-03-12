@@ -1,0 +1,105 @@
+
+> nanosol-crm@0.1.0 test
+> jest __tests__/utils.test.ts --verbose
+
+  console.warn
+    A function to advance timers was called but the timers APIs are not replaced with fake timers. Call `jest.useFakeTimers()` in this test file or enable fake timers for all tests by setting 'fakeTimers': {'enableGlobally': true} in Jest configuration file.
+    Stack Trace:
+    
+        [0m [90m 138 |[39m
+         [90m 139 |[39m         debouncedFn([32m'arg1'[39m[33m,[39m [32m'arg2'[39m)[33m;[39m
+        [31m[1m>[22m[39m[90m 140 |[39m         jest[33m.[39madvanceTimersByTime([35m100[39m)[33m;[39m
+         [90m     |[39m              [31m[1m^[22m[39m
+         [90m 141 |[39m
+         [90m 142 |[39m         expect(mockFn)[33m.[39mtoHaveBeenCalledWith([32m'arg1'[39m[33m,[39m [32m'arg2'[39m)[33m;[39m
+         [90m 143 |[39m     })[33m;[39m[0m
+    
+          Error: 
+          at FakeTimers._checkFakeTimers (node_modules/@jest/fake-timers/build/index.js:641:7)
+          at FakeTimers.advanceTimersByTime (node_modules/@jest/fake-timers/build/index.js:575:14)
+          at Object.advanceTimersByTime (__tests__/utils.test.ts:140:14)
+
+    [0m [90m 138 |[39m
+     [90m 139 |[39m         debouncedFn([32m'arg1'[39m[33m,[39m [32m'arg2'[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 140 |[39m         jest[33m.[39madvanceTimersByTime([35m100[39m)[33m;[39m
+     [90m     |[39m              [31m[1m^[22m[39m
+     [90m 141 |[39m
+     [90m 142 |[39m         expect(mockFn)[33m.[39mtoHaveBeenCalledWith([32m'arg1'[39m[33m,[39m [32m'arg2'[39m)[33m;[39m
+     [90m 143 |[39m     })[33m;[39m[0m
+
+      at FakeTimers._checkFakeTimers (node_modules/@jest/fake-timers/build/index.js:639:28)
+      at FakeTimers.advanceTimersByTime (node_modules/@jest/fake-timers/build/index.js:575:14)
+      at Object.advanceTimersByTime (__tests__/utils.test.ts:140:14)
+
+FAIL __tests__/utils.test.ts (5.53 s)
+  cn (classnames utility)
+    ΓêÜ should merge class names (9 ms)
+    ΓêÜ should handle conditional classes
+    ΓêÜ should merge Tailwind classes correctly (1 ms)
+    ΓêÜ should handle undefined and null
+  formatCurrency
+    ΓêÜ should format USD currency correctly (24 ms)
+    ΓêÜ should handle zero (1 ms)
+    ΓêÜ should handle negative numbers
+    ΓêÜ should handle large numbers
+    ΓêÜ should support different currencies (1 ms)
+  formatDate
+    ΓêÜ should format Date object (6 ms)
+    ΓêÜ should format date string (1 ms)
+  formatDateTime
+    ΓêÜ should format date with time (1 ms)
+  generateId
+    ΓêÜ should generate a string (1 ms)
+    ΓêÜ should generate unique ids (1 ms)
+    ΓêÜ should generate ids of expected length
+  truncate
+    ΓêÜ should truncate long strings
+    ΓêÜ should not truncate short strings (1 ms)
+    ΓêÜ should handle exact length
+    ΓêÜ should handle empty string (1 ms)
+  sleep
+    ├ù should resolve after specified time (5006 ms)
+    ΓêÜ should return a promise (1 ms)
+  debounce
+    ΓêÜ should debounce function calls (4 ms)
+    ├ù should pass arguments to debounced function (33 ms)
+
+  ΓùÅ sleep ΓÇ║ should resolve after specified time
+
+    thrown: "Exceeded timeout of 5000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      103 |
+      104 | describe('sleep', () => {
+    > 105 |     it('should resolve after specified time', async () => {
+          |     ^
+      106 |         const start = Date.now();
+      107 |         await sleep(100);
+      108 |         const elapsed = Date.now() - start;
+
+      at it (__tests__/utils.test.ts:105:5)
+      at Object.describe (__tests__/utils.test.ts:104:1)
+
+  ΓùÅ debounce ΓÇ║ should pass arguments to debounced function
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: "arg1", "arg2"
+
+    Number of calls: 0
+
+      140 |         jest.advanceTimersByTime(100);
+      141 |
+    > 142 |         expect(mockFn).toHaveBeenCalledWith('arg1', 'arg2');
+          |                        ^
+      143 |     });
+      144 |
+      145 |     afterEach(() => {
+
+      at Object.toHaveBeenCalledWith (__tests__/utils.test.ts:142:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 21 passed, 23 total
+Snapshots:   0 total
+Time:        6.283 s
+Ran all test suites matching __tests__/utils.test.ts.

@@ -40,6 +40,7 @@ export interface Contact {
     custom_fields?: Record<string, unknown>;
     lead_score?: number | null;
     status?: string | null;
+    source?: string | null;
     owner_id?: string | null;
     last_call_status?: string | null;
     last_call_at?: string | null;

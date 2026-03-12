@@ -176,9 +176,10 @@ export default function DealsPage() {
             await deleteDeal(id);
             toast.success("Deal deleted");
             mutate();
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
-            toast.error("Failed to delete deal");
+            const message = error instanceof Error ? error.message : "Failed to delete deal";
+            toast.error("Failed to delete deal", { description: message });
         }
     };
 
@@ -191,7 +192,7 @@ export default function DealsPage() {
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="space-y-6"
+            className="space-y-6 min-w-0"
         >
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -283,7 +284,7 @@ export default function DealsPage() {
                     </Button>
                 </div>
             ) : (
-                <div className="flex gap-4 overflow-x-auto pb-4">
+                <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2">
                     {stages.map((stage) => {
                         const stageDeals = getDealsForStage(stage.id);
                         const stageValue = stageDeals.reduce((acc, d) => acc + d.value, 0);

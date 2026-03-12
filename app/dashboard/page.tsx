@@ -43,7 +43,7 @@ export default function DashboardPage() {
     const { mutate: mutateContacts } = useContacts();
     const { mutate: mutateDeals } = useDeals();
     const { mutate: mutateActivities } = useActivities();
-    const { mutate: mutateTasks } = useTasks("todo");
+    const { mutate: mutateTasks } = useTasks("pending");
     const { data: pipelines } = usePipelines();
 
     const [contactDialogOpen, setContactDialogOpen] = useState(false);

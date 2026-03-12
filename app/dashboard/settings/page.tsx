@@ -23,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar, useUpdatePassword } from "@/hooks/use-data";
+import { useActiveProfile, useUpdateProfile, useOrganization, useUpdateOrganization, useApiKeys, useUpdateApiKeys, useIntegrations, useSyncCalendar, useUpdatePassword, useDeleteUserAccountFinal } from "@/hooks/use-settings";
 import { EmailAccountManager } from "@/components/settings/email-account-manager";
 import { SipAccountManager } from "@/components/settings/sip-account-manager";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -55,6 +55,7 @@ function SettingsContent() {
     const { data: integrations } = useIntegrations(profile?.id || null);
     const { trigger: syncCalendar, isMutating: isSyncing } = useSyncCalendar();
     const { trigger: updatePassword, isMutating: isUpdatingPassword } = useUpdatePassword();
+    const { trigger: deleteAccount, isMutating: isDeletingAccount } = useDeleteUserAccountFinal();
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -270,6 +271,24 @@ function SettingsContent() {
         }
     };
 
+    const onDeleteAccount = async () => {
+        if (!window.confirm("Are you absolutely sure you want to delete your account? This action is permanent and cannot be undone.")) {
+            return;
+        }
+
+        try {
+            await deleteAccount();
+            toast.success("Account deleted successfully. Redirecting...");
+            // Force logout and redirect
+            const supabase = createClient();
+            await supabase.auth.signOut();
+            window.location.href = "/login";
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Failed to delete account";
+            toast.error(message);
+        }
+    };
+
 
     return (
         <motion.div
@@ -280,9 +299,7 @@ function SettingsContent() {
             {/* Header */}
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-                <p className="text-muted-foreground">
-                    Manage your account and organization settings
-                </p>
+                <p className="text-muted-foreground">Manage your organization and account preferences.</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -810,7 +827,15 @@ function SettingsContent() {
                                         <p className="text-sm font-medium">Delete Account</p>
                                         <p className="text-xs opacity-70">Permanently remove all data</p>
                                     </div>
-                                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10">Delete</Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="text-destructive hover:bg-destructive/10"
+                                        onClick={onDeleteAccount}
+                                        disabled={isDeletingAccount}
+                                    >
+                                        {isDeletingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Workflow, Contact } from "@/types";
+import { AIProviderKeys } from "@/lib/ai-services";
 import { Node as RFNode, Edge } from "reactflow";
 import { sendEmail } from "@/lib/email-service";
 
@@ -119,9 +120,10 @@ export async function processWorkflowRun(runId: string, depth = 0) {
                 await advanceWorkflow(runId, nextNodeId, depth + 1);
                 break;
         }
-    } catch (err: any) {
-        await logExecution(run, nextNodeId, 'error', `Execution failed: ${err.message}`);
-        await markRunStatus(runId, 'failed', { metadata: { ...run.metadata, error: err.message } });
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        await logExecution(run, nextNodeId, 'error', `Execution failed: ${errorMessage}`);
+        await markRunStatus(runId, 'failed', { metadata: { ...run.metadata, error: errorMessage } });
     }
 }
 
@@ -136,7 +138,7 @@ async function logExecution(run: WorkflowRun | null, nodeId: string | null, leve
     });
 }
 
-async function markRunStatus(runId: string, status: string, updates: Record<string, any> = {}) {
+async function markRunStatus(runId: string, status: string, updates: Record<string, unknown> = {}) {
     await getSupabaseAdmin().from('workflow_runs').update({
         status,
         ...updates,
@@ -154,9 +156,9 @@ async function advanceWorkflow(runId: string, nodeId: string, depth: number) {
     await processWorkflowRun(runId, depth);
 }
 
-function calculateDelay(data: any): Date {
-    const duration = parseInt(data.duration || '0');
-    const unit = data.unit || 'days';
+function calculateDelay(data: Record<string, unknown>): Date {
+    const duration = parseInt((data.duration as string) || '0');
+    const unit = (data.unit as string) || 'days';
     const date = new Date();
 
     if (unit === 'minutes') date.setMinutes(date.getMinutes() + duration);
@@ -191,7 +193,7 @@ async function evaluateCondition(run: WorkflowRun, node: RFNode): Promise<'true'
     const { field, operator, value } = node.data;
     if (!field || !operator) return 'true'; // Default path if misconfigured
 
-    const contactValue = (run.contact as any)[field as string];
+    const contactValue = (run.contact as unknown as Record<string, unknown>)[field as string];
 
     switch (operator) {
         case 'equals': return String(contactValue).trim().toLowerCase() === String(value).trim().toLowerCase() ? 'true' : 'false';
@@ -234,7 +236,7 @@ async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
 
         if (apiKeys) {
             const { generateContactScore } = await import('@/lib/ai-services');
-            const result = await generateContactScore(run.contact as any, activities || [], apiKeys as any);
+            const result = await generateContactScore(run.contact as unknown as Record<string, unknown>, activities || [], apiKeys as unknown as AIProviderKeys);
             if (result) {
                 await getSupabaseAdmin().from('contacts')
                     .update({
@@ -249,15 +251,90 @@ async function executeGeneralAction(run: WorkflowRun, node: RFNode) {
         }
     }
     // Reserved for future expansion natively described in the Builder UI
+    else if (actionType === 'notify_user') {
+        const userId = node.data.userId as string;
+        const title = node.data.title || 'Automation Alert';
+        const message = node.data.message || 'An automation trigger has occurred.';
+        
+        if (!userId) {
+            await logExecution(run, node.id, 'error', 'No user specified for notification');
+            return;
+        }
+
+        const { error: notifError } = await getSupabaseAdmin()
+            .from('notifications')
+            .insert({
+                user_id: userId,
+                organization_id: run.organization_id,
+                title,
+                message,
+                type: 'system',
+                link_url: `/dashboard/contacts/${run.contact_id}`,
+                read: false
+            });
+
+        if (notifError) {
+            await logExecution(run, node.id, 'error', `Failed to send notification: ${notifError.message}`);
+        } else {
+            await logExecution(run, node.id, 'info', `Sent notification to user ${userId}`);
+        }
+    }
     else if (actionType === 'update_stage') {
-        await logExecution(run, node.id, 'info', `Update stage action placeholder fired.`);
+        const stage = node.data.stage as string;
+        if (!stage) {
+            await logExecution(run, node.id, 'error', 'No stage specified for update');
+            return;
+        }
+        
+        // Find the most recent deal for this contact to update its stage
+        const { data: deals, error: dealError } = await getSupabaseAdmin()
+            .from('deals')
+            .select('id')
+            .eq('contact_id', run.contact_id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (dealError) {
+            await logExecution(run, node.id, 'error', `Failed to fetch deals: ${dealError.message}`);
+            return;
+        }
+
+        if (deals && deals.length > 0) {
+            const { error: updateError } = await getSupabaseAdmin()
+                .from('deals')
+                .update({ stage })
+                .eq('id', deals[0].id);
+            
+            if (updateError) {
+                await logExecution(run, node.id, 'error', `Failed to update deal stage: ${updateError.message}`);
+            } else {
+                await logExecution(run, node.id, 'info', `Updated deal ${deals[0].id} stage to: ${stage}`);
+            }
+        } else {
+            await logExecution(run, node.id, 'warn', 'No deals found for contact to update stage');
+        }
     }
     else if (actionType === 'assign_owner') {
-        await logExecution(run, node.id, 'info', `Assign owner action placeholder fired.`);
+        const ownerId = node.data.ownerId as string;
+        if (!ownerId) {
+            await logExecution(run, node.id, 'error', 'No owner specified for assignment');
+            return;
+        }
+
+        const { error: updateError } = await getSupabaseAdmin()
+            .from('contacts')
+            .update({ owner_id: ownerId })
+            .eq('id', run.contact_id);
+        
+        if (updateError) {
+             await logExecution(run, node.id, 'error', `Failed to assign owner: ${updateError.message}`);
+        } else {
+            await logExecution(run, node.id, 'info', `Assigned contact owner to: ${ownerId}`);
+        }
     }
 }
 
-export async function evaluateTriggers(triggerType: string, organizationId: string, payload: { contactId: string; [key: string]: any }) {
+export async function evaluateTriggers(triggerType: string, organizationId: string, payload: { contactId: string; [key: string]: unknown }) {
     // 1. Fetch active workflows for this trigger
     const { data: workflows } = await getSupabaseAdmin()
         .from('workflows')

@@ -14,7 +14,25 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const organization_id = session.user.user_metadata.organization_id;
+        
+        // 1. Try metadata first
+        let organization_id = session.user.user_metadata.organization_id;
+
+        // 2. Fallback to profile lookup if metadata is missing (robustness fix)
+        if (!organization_id) {
+            console.warn("[Contacts API] organization_id missing from metadata, falling back to profile lookup");
+            const { data: profile } = await supabase
+                .from("profiles")
+                .select("organization_id")
+                .eq("user_id", session.user.id)
+                .maybeSingle();
+            
+            organization_id = profile?.organization_id;
+        }
+
+        if (!organization_id) {
+            return NextResponse.json({ error: "Could not identify organization for user. Please re-login." }, { status: 400 });
+        }
 
         const { data, error } = await supabase
             .from("contacts")

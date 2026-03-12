@@ -113,119 +113,120 @@ export function Sidebar() {
                     )}
                 </div>
 
-                {/* Navigation */}
-                <ScrollArea className="flex-1 px-3 py-4">
-                    <nav className="flex flex-col gap-1">
-                        {filteredNavigation.map((item) => {
-                            const isActive = pathname === item.href;
-                            const NavLink = (
-                                <Link
-                                    key={item.name}
-                                    href={item.href}
-                                    className={cn(
-                                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                                        "hover:bg-accent hover:text-accent-foreground",
-                                        isActive
-                                            ? "bg-primary/10 text-primary"
-                                            : "text-muted-foreground"
-                                    )}
-                                >
-                                    <item.icon
+                {/* Navigation and Bottom Actions (All Scrollable) */}
+                <ScrollArea className="flex-1">
+                    <div className="flex flex-col h-full px-3 py-4">
+                        <nav className="flex flex-col gap-1 flex-1">
+                            {filteredNavigation.map((item) => {
+                                const isActive = pathname === item.href;
+                                const NavLink = (
+                                    <Link
+                                        key={item.name}
+                                        href={item.href}
                                         className={cn(
-                                            "h-5 w-5 shrink-0",
-                                            isActive ? "text-primary" : ""
+                                            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                                            "hover:bg-accent hover:text-accent-foreground",
+                                            isActive
+                                                ? "bg-primary/10 text-primary"
+                                                : "text-muted-foreground"
                                         )}
-                                    />
-                                    <AnimatePresence>
-                                        {!sidebarCollapsed && (
-                                            <motion.span
-                                                initial={{ opacity: 0, width: 0 }}
-                                                animate={{ opacity: 1, width: "auto" }}
-                                                exit={{ opacity: 0, width: 0 }}
-                                                className="whitespace-nowrap"
-                                            >
-                                                {item.name}
-                                            </motion.span>
-                                        )}
-                                    </AnimatePresence>
-                                </Link>
-                            );
-
-                            if (sidebarCollapsed) {
-                                return (
-                                    <Tooltip key={item.name}>
-                                        <TooltipTrigger asChild>{NavLink}</TooltipTrigger>
-                                        <TooltipContent side="right">{item.name}</TooltipContent>
-                                    </Tooltip>
+                                    >
+                                        <item.icon
+                                            className={cn(
+                                                "h-5 w-5 shrink-0",
+                                                isActive ? "text-primary" : ""
+                                            )}
+                                        />
+                                        <AnimatePresence>
+                                            {!sidebarCollapsed && (
+                                                <motion.span
+                                                    initial={{ opacity: 0, width: 0 }}
+                                                    animate={{ opacity: 1, width: "auto" }}
+                                                    exit={{ opacity: 0, width: 0 }}
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    {item.name}
+                                                </motion.span>
+                                            )}
+                                        </AnimatePresence>
+                                    </Link>
                                 );
-                            }
 
-                            return NavLink;
-                        })}
-                    </nav>
-                </ScrollArea>
+                                if (sidebarCollapsed) {
+                                    return (
+                                        <Tooltip key={item.name}>
+                                            <TooltipTrigger asChild>{NavLink}</TooltipTrigger>
+                                            <TooltipContent side="right">{item.name}</TooltipContent>
+                                        </Tooltip>
+                                    );
+                                }
 
-                {/* Bottom Navigation */}
-                <div className="border-t border-border px-3 py-4">
-                    {filteredBottomNavigation.map((item) => {
-                        const isActive = pathname === item.href;
-                        const NavLink = (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                className={cn(
-                                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                                    "hover:bg-accent hover:text-accent-foreground",
-                                    isActive
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-muted-foreground"
-                                )}
+                                return NavLink;
+                            })}
+                        </nav>
+
+                        <div className="mt-auto pt-4 border-t border-border flex flex-col gap-1">
+                            {filteredBottomNavigation.map((item) => {
+                                const isActive = pathname === item.href;
+                                const NavLink = (
+                                    <Link
+                                        key={item.name}
+                                        href={item.href}
+                                        className={cn(
+                                            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                                            "hover:bg-accent hover:text-accent-foreground",
+                                            isActive
+                                                ? "bg-primary/10 text-primary"
+                                                : "text-muted-foreground"
+                                        )}
+                                    >
+                                        <item.icon className="h-5 w-5 shrink-0" />
+                                        <AnimatePresence>
+                                            {!sidebarCollapsed && (
+                                                <motion.span
+                                                    initial={{ opacity: 0, width: 0 }}
+                                                    animate={{ opacity: 1, width: "auto" }}
+                                                    exit={{ opacity: 0, width: 0 }}
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    {item.name}
+                                                </motion.span>
+                                            )}
+                                        </AnimatePresence>
+                                    </Link>
+                                );
+
+                                if (sidebarCollapsed) {
+                                    return (
+                                        <Tooltip key={item.name}>
+                                            <TooltipTrigger asChild>{NavLink}</TooltipTrigger>
+                                            <TooltipContent side="right">{item.name}</TooltipContent>
+                                        </Tooltip>
+                                    );
+                                }
+
+                                return NavLink;
+                            })}
+
+                            {/* Collapse Toggle */}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                                className="mt-2 w-full justify-start px-3"
                             >
-                                <item.icon className="h-5 w-5 shrink-0" />
-                                <AnimatePresence>
-                                    {!sidebarCollapsed && (
-                                        <motion.span
-                                            initial={{ opacity: 0, width: 0 }}
-                                            animate={{ opacity: 1, width: "auto" }}
-                                            exit={{ opacity: 0, width: 0 }}
-                                            className="whitespace-nowrap"
-                                        >
-                                            {item.name}
-                                        </motion.span>
-                                    )}
-                                </AnimatePresence>
-                            </Link>
-                        );
-
-                        if (sidebarCollapsed) {
-                            return (
-                                <Tooltip key={item.name}>
-                                    <TooltipTrigger asChild>{NavLink}</TooltipTrigger>
-                                    <TooltipContent side="right">{item.name}</TooltipContent>
-                                </Tooltip>
-                            );
-                        }
-
-                        return NavLink;
-                    })}
-
-                    {/* Collapse Toggle */}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                        className="mt-2 w-full justify-center"
-                    >
-                        {sidebarCollapsed ? (
-                            <ChevronRight className="h-4 w-4" />
-                        ) : (
-                            <>
-                                <ChevronLeft className="h-4 w-4 mr-2" />
-                                <span>Collapse</span>
-                            </>
-                        )}
-                    </Button>
-                </div>
+                                {sidebarCollapsed ? (
+                                    <ChevronRight className="h-4 w-4 mx-auto" />
+                                ) : (
+                                    <>
+                                        <ChevronLeft className="h-4 w-4 mr-3" />
+                                        <span>Collapse</span>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </ScrollArea>
             </motion.aside>
         </TooltipProvider>
     );
