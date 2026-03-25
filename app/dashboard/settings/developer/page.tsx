@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Copy, Plus, Trash2, Key, ShieldAlert } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -23,7 +24,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { Copy, Plus, Trash2, Key, ShieldAlert, RefreshCw, Globe } from "lucide-react";
 
 interface ApiKey {
     id: string;
@@ -41,10 +42,44 @@ export default function DeveloperSettingsPage() {
     const [open, setOpen] = useState(false);
     const [newLabel, setNewLabel] = useState("");
     const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+    const [crmApiKey, setCrmApiKey] = useState<string>("");
+    const [isUpdatingCrmKey, setIsUpdatingCrmKey] = useState(false);
+    const [origin, setOrigin] = useState("");
 
     useEffect(() => {
+        setOrigin(window.location.origin);
         fetchKeys();
+        fetchCrmKey();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const fetchCrmKey = async () => {
+        try {
+            const { data: profile } = await supabase.auth.getUser();
+            if (!profile.user) return;
+            
+            // Get organization_id from profiles
+            const { data: profileData } = await supabase
+                .from("profiles")
+                .select("organization_id")
+                .eq("user_id", profile.user.id)
+                .single();
+                
+            if (!profileData) return;
+
+            const { data } = await supabase
+                .from("api_keys")
+                .select("crm_api_key")
+                .eq("organization_id", profileData.organization_id)
+                .single();
+
+            if (data?.crm_api_key) {
+                setCrmApiKey(data.crm_api_key);
+            }
+        } catch (e) {
+            console.error("Error fetching CRM key:", e);
+        }
+    };
 
     const fetchKeys = async () => {
         try {
@@ -80,8 +115,9 @@ export default function DeveloperSettingsPage() {
             // Refresh list
             fetchKeys();
             toast.success("API Key generated");
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Failed to create key";
+            toast.error(message);
         }
     };
 
@@ -95,7 +131,7 @@ export default function DeveloperSettingsPage() {
 
             setKeys(keys.filter((k) => k.id !== id));
             toast.success("API Key revoked");
-        } catch (error) {
+        } catch {
             toast.error("Failed to revoke key");
         }
     };
@@ -103,6 +139,33 @@ export default function DeveloperSettingsPage() {
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
         toast.success("Copied to clipboard");
+    };
+
+    const updateCrmKey = async () => {
+        setIsUpdatingCrmKey(true);
+        try {
+            const { data: profile } = await supabase.auth.getUser();
+            const { data: profileData } = await supabase
+                .from("profiles")
+                .select("organization_id")
+                .eq("user_id", profile.user?.id)
+                .single();
+
+            const { error } = await supabase
+                .from("api_keys")
+                .upsert({ 
+                    organization_id: profileData?.organization_id, 
+                    crm_api_key: crmApiKey,
+                    active_provider: 'openai' // default
+                }, { onConflict: 'organization_id' });
+
+            if (error) throw error;
+            toast.success("CRM API Key updated");
+        } catch {
+            toast.error("Failed to update CRM Key");
+        } finally {
+            setIsUpdatingCrmKey(false);
+        }
     };
 
     return (
@@ -149,7 +212,7 @@ export default function DeveloperSettingsPage() {
                                     <ShieldAlert className="h-5 w-5 mt-0.5" />
                                     <div className="text-sm">
                                         <p className="font-bold">Save this key now!</p>
-                                        <p>We won't show it again. If you lose it, you'll need to generate a new one.</p>
+                                        <p>We won&apos;t show it again. If you lose it, you&apos;ll need to generate a new one.</p>
                                     </div>
                                 </div>
                                 <div className="relative">
@@ -213,6 +276,78 @@ export default function DeveloperSettingsPage() {
                         <p>No active API keys.</p>
                     </div>
                 )}
+            </div>
+
+            <Separator className="my-8" />
+
+            <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-xl flex items-center gap-2">
+                            <Globe className="h-5 w-5 text-primary" />
+                            CRM Integration Key
+                        </CardTitle>
+                        <CardDescription>
+                            This key is used for the Legacy Lead API (/api/v1/Lead).
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="crm_key">CRM API Key</Label>
+                            <div className="flex gap-2">
+                                <Input 
+                                    id="crm_key" 
+                                    value={crmApiKey} 
+                                    onChange={(e) => setCrmApiKey(e.target.value)}
+                                    placeholder="Enter your secret integration key"
+                                    className="font-mono text-xs"
+                                />
+                                <Button 
+                                    variant="outline" 
+                                    size="icon"
+                                    onClick={() => {
+                                        const key = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                                            .map(b => b.toString(16).padStart(2, '0'))
+                                            .join('');
+                                        setCrmApiKey(key);
+                                    }}
+                                >
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                    onClick={updateCrmKey}
+                                    disabled={isUpdatingCrmKey}
+                                >
+                                    {isUpdatingCrmKey ? "..." : "Save"}
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-primary/5 border-primary/20">
+                    <CardHeader>
+                        <CardTitle className="text-lg">API Integration Help</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-1">
+                            <p className="text-xs font-semibold text-primary">PUSH LEADS (POST)</p>
+                            <pre className="p-3 bg-black text-[10px] text-green-400 rounded overflow-x-auto whitespace-pre-wrap break-all">
+{`curl -X POST '${origin || ''}/api/v1/Lead' \\
+-H "X-Api-Key: ${crmApiKey || 'YOUR_KEY'}" \\
+-H "Content-Type: application/json" \\
+-d '{"firstName":"Demo","emailAddress":"demo@example.com"}'`}
+                            </pre>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-xs font-semibold text-primary">PULL LEADS (GET)</p>
+                            <pre className="p-3 bg-black text-[10px] text-blue-400 rounded overflow-x-auto whitespace-pre-wrap break-all">
+{`curl -X GET '${origin || ''}/api/v1/Lead?where[0][type]=after&where[0][field]=createdAt&where[0][value]=2024-03-25T00:00:00' \\
+-H "X-Api-Key: ${crmApiKey || 'YOUR_KEY'}"`}
+                            </pre>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );

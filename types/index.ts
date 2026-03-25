@@ -392,6 +392,7 @@ export interface APIKeys {
     gemini_key_encrypted?: string;
     qwen_key_encrypted?: string;
     kimi_key_encrypted?: string;
+    crm_api_key?: string;
     active_provider: AIProvider;
     created_at: string;
     updated_at: string;

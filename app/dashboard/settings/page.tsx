@@ -99,6 +99,7 @@ function SettingsContent() {
             gemini_key: "",
             qwen_key: "",
             kimi_key: "",
+            crm_api_key: apiKeys?.crm_api_key || "",
             active_provider: (apiKeys?.active_provider || "openai") as AIProvider,
         }
     });
@@ -160,6 +161,7 @@ function SettingsContent() {
         if (apiKeys && !apiKeysInitialized.current) {
             apiKeysForm.reset({
                 active_provider: apiKeys.active_provider || "openai",
+                crm_api_key: apiKeys.crm_api_key || "",
                 openai_key: "",
                 gemini_key: "",
                 qwen_key: "",
@@ -233,10 +235,11 @@ function SettingsContent() {
 
 
 
-    const onApiKeysSubmit = async (data: { openai_key: string; gemini_key: string; qwen_key: string; kimi_key: string; active_provider: AIProvider }) => {
+    const onApiKeysSubmit = async (data: { openai_key: string; gemini_key: string; qwen_key: string; kimi_key: string; crm_api_key: string; active_provider: AIProvider }) => {
         try {
             const updates: Partial<APIKeys> = {
                 active_provider: data.active_provider,
+                crm_api_key: data.crm_api_key
             };
             // Only include keys that were entered (non-empty)
             if (data.openai_key) updates.openai_key_encrypted = data.openai_key;
@@ -246,7 +249,14 @@ function SettingsContent() {
 
             await updateApiKeys({ orgId: profile.organization_id, updates });
             toast.success("API keys saved successfully");
-            apiKeysForm.reset({ openai_key: "", gemini_key: "", qwen_key: "", kimi_key: "", active_provider: data.active_provider });
+            apiKeysForm.reset({ 
+                openai_key: "", 
+                gemini_key: "", 
+                qwen_key: "", 
+                kimi_key: "", 
+                crm_api_key: data.crm_api_key,
+                active_provider: data.active_provider 
+            });
         } catch {
             toast.error("Failed to save API keys");
         }
@@ -699,6 +709,35 @@ function SettingsContent() {
                                                 </select>
                                             </div>
                                             <Separator />
+                                            
+                                            <div className="space-y-2 pb-4">
+                                                <Label htmlFor="crm_api_key">CRM API Key (Legacy/External)</Label>
+                                                <div className="flex gap-2">
+                                                    <Input 
+                                                        id="crm_api_key" 
+                                                        {...apiKeysForm.register("crm_api_key")} 
+                                                        placeholder="Enter a secret key for external integrations" 
+                                                        className="font-mono"
+                                                    />
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="outline" 
+                                                        size="icon"
+                                                        onClick={() => {
+                                                            const key = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                                                                .map(b => b.toString(16).padStart(2, '0'))
+                                                                .join('');
+                                                            apiKeysForm.setValue("crm_api_key", key);
+                                                        }}
+                                                    >
+                                                        <RefreshCw className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Use this key in the <code>X-Api-Key</code> header to push/pull leads externally.
+                                                </p>
+                                            </div>
+
                                             <div className="grid gap-4 sm:grid-cols-2">
                                                 <div className="space-y-2">
                                                     <Label htmlFor="openai_key">OpenAI API Key</Label>
@@ -718,13 +757,53 @@ function SettingsContent() {
                                                 </div>
                                             </div>
                                             <p className="text-xs text-muted-foreground">
-                                                Only enter keys you wish to update. Leave fields empty to keep existing keys.
+                                                Only enter AI keys you wish to update. Leave empty to keep existing.
                                             </p>
                                             <Button type="submit" disabled={isUpdatingApiKeys}>
                                                 {isUpdatingApiKeys && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                Save AI Keys
+                                                Save All Keys
                                             </Button>
                                         </form>
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-primary/20 bg-primary/5">
+                                    <CardHeader>
+                                        <CardTitle className="text-lg flex items-center gap-2">
+                                            <Globe className="h-5 w-5 text-primary" />
+                                            API Integration Examples
+                                        </CardTitle>
+                                        <CardDescription>
+                                            How to push and pull leads using your CRM API Key.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-6">
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-semibold">Push Leads (POST)</h4>
+                                            <pre className="p-4 rounded-xl bg-black/90 text-green-400 text-xs overflow-x-auto border border-white/10">
+{`curl -X POST \\
+  '${window.location.origin}/api/v1/Lead' \\
+  -H 'Accept: application/json' \\
+  -H 'X-Api-Key: ${apiKeysForm.watch("crm_api_key") || 'YOUR_KEY'}' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "firstName": "John",
+    "lastName": "Doe",
+    "emailAddress": "john.doe@example.com",
+    "phoneNumber": "+1234567890"
+  }'`}
+                                            </pre>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-semibold">Pull Leads (GET)</h4>
+                                            <pre className="p-4 rounded-xl bg-black/90 text-blue-400 text-xs overflow-x-auto border border-white/10">
+{`curl -X GET \\
+  '${window.location.origin}/api/v1/Lead?where[0][type]=after&where[0][field]=createdAt&where[0][value]=2024-03-25T00:00:00' \\
+  -H 'Accept: application/json' \\
+  -H 'X-Api-Key: ${apiKeysForm.watch("crm_api_key") || 'YOUR_KEY'}'`}
+                                            </pre>
+                                        </div>
                                     </CardContent>
                                 </Card>
 
