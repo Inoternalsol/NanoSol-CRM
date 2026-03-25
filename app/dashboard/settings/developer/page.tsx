@@ -144,25 +144,21 @@ export default function DeveloperSettingsPage() {
     const updateCrmKey = async () => {
         setIsUpdatingCrmKey(true);
         try {
-            const { data: profile } = await supabase.auth.getUser();
-            const { data: profileData } = await supabase
-                .from("profiles")
-                .select("organization_id")
-                .eq("user_id", profile.user?.id)
-                .single();
+            const res = await fetch("/api/settings/crm-key", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ apiKey: crmApiKey })
+            });
 
-            const { error } = await supabase
-                .from("api_keys")
-                .upsert({ 
-                    organization_id: profileData?.organization_id, 
-                    crm_api_key: crmApiKey,
-                    active_provider: 'openai' // default
-                }, { onConflict: 'organization_id' });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "Failed to update CRM Key");
+            }
 
-            if (error) throw error;
             toast.success("CRM API Key updated");
-        } catch {
-            toast.error("Failed to update CRM Key");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Failed to update CRM Key";
+            toast.error(message);
         } finally {
             setIsUpdatingCrmKey(false);
         }
