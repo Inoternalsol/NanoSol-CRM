@@ -13,6 +13,5 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
-    outputFileTracingRoot: process.cwd(),
 };
 export default nextConfig;
