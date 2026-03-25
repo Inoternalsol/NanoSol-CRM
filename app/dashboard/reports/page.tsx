@@ -8,6 +8,7 @@ import { useActiveProfile, usePipelines } from "@/hooks/use-data";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Pipeline } from "@/types";
+import { cn } from "@/lib/utils";
 
 export default function ReportsPage() {
     const [days, setDays] = useState(7);
@@ -209,8 +210,12 @@ export default function ReportsPage() {
                                 {tasks.distribution.map(item => (
                                     <div key={item.name} className="flex items-center gap-2">
                                         <div
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: item.color }}
+                                            className={cn(
+                                                "w-2 h-2 rounded-full",
+                                                item.color === '#22c55e' ? 'bg-green-500' :
+                                                    item.color === '#3b82f6' ? 'bg-blue-500' :
+                                                        item.color === '#eab308' ? 'bg-yellow-500' : 'bg-muted-foreground'
+                                            )}
                                         />
                                         <span className="text-muted-foreground">{item.name}: {item.value}</span>
                                     </div>

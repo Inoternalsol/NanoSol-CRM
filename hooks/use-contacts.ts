@@ -38,8 +38,13 @@ const DEFAULT_STATUSES: Omit<ContactStatus, "id" | "organization_id" | "created_
     { name: "not_interested", label: "Not interested", color: "red", order: 2 },
     { name: "call_back", label: "Call back", color: "blue", order: 3 },
     { name: "no_answer", label: "No Answer", color: "orange", order: 4 },
-    { name: "not_potential", label: "Not potential", color: "slate", order: 5 },
-    { name: "voice_message", label: "Voice message", color: "purple", order: 6 },
+    { name: "no_answer_1", label: "No answer 1", color: "orange", order: 5 },
+    { name: "no_answer_2", label: "No answer 2", color: "orange", order: 6 },
+    { name: "no_answer_3", label: "No answer 3", color: "orange", order: 7 },
+    { name: "reassign", label: "Reassign", color: "blue", order: 8 },
+    { name: "recovery", label: "Recovery", color: "green", order: 9 },
+    { name: "not_potential", label: "Not potential", color: "slate", order: 10 },
+    { name: "voice_message", label: "Voice message", color: "purple", order: 11 },
 ];
 
 // ============================================

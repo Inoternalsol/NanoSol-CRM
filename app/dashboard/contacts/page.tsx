@@ -72,11 +72,7 @@ function getInitials(firstName: string, lastName?: string | null) {
     return `${firstName[0]}${lastName?.[0] || ""}`.toUpperCase();
 }
 
-function getScoreColor(score: number) {
-    if (score >= 80) return "text-green-500";
-    if (score >= 60) return "text-yellow-500";
-    return "text-red-500";
-}
+
 
 export default function ContactsPage() {
     const router = useRouter();
@@ -595,7 +591,7 @@ export default function ContactsPage() {
                                         <TableHead>Last Call</TableHead>
                                         <TableHead>Call Status</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead>Score</TableHead>
+                                        <TableHead>Phone</TableHead>
                                         <TableHead>Owner</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
@@ -673,10 +669,8 @@ export default function ContactsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
-                                                <span
-                                                    className={`font-semibold ${getScoreColor(contact.lead_score || 0)}`}
-                                                >
-                                                    {contact.lead_score || 0}
+                                                <span className="text-sm font-medium">
+                                                    {contact.phone || "-"}
                                                 </span>
                                             </TableCell>
                                             <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>

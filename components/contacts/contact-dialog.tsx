@@ -40,7 +40,6 @@ interface ContactFormData {
     company: string;
     job_title: string;
     status: string;
-    lead_score: number;
 }
 
 interface ContactDialogProps {
@@ -95,7 +94,6 @@ export function ContactDialog({
                 company: contact.company || "",
                 job_title: contact.job_title || "",
                 status: contact.status || "new",
-                lead_score: contact.lead_score || 0,
             }
             : {
                 first_name: "",
@@ -105,7 +103,6 @@ export function ContactDialog({
                 company: "",
                 job_title: "",
                 status: "new",
-                lead_score: 0,
             },
     });
 
@@ -124,7 +121,6 @@ export function ContactDialog({
                 company: contact.company || "",
                 job_title: contact.job_title || "",
                 status: contact.status || "new",
-                lead_score: Number(contact.lead_score) || 0,
             });
         } else {
             reset({
@@ -135,7 +131,6 @@ export function ContactDialog({
                 company: "",
                 job_title: "",
                 status: "new",
-                lead_score: 0,
             });
         }
     }, [contact, reset]);
@@ -147,7 +142,6 @@ export function ContactDialog({
                     id: contact.id,
                     updates: {
                         ...data,
-                        lead_score: Number(data.lead_score),
                     },
                 });
                 toast.success("Contact updated successfully");
@@ -162,7 +156,6 @@ export function ContactDialog({
                     owner_id: ownerId, // Automatically assign to the current agent creating the contact
                     tags: [],
                     custom_fields: {},
-                    lead_score: Number(data.lead_score),
                 });
                 toast.success("Contact created successfully");
             }
@@ -273,35 +266,24 @@ export function ContactDialog({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="status">Status</Label>
-                                    <Select
-                                        value={watchedStatus}
-                                        onValueChange={(value) => setValue("status", value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {statuses?.map((s) => (
-                                                <SelectItem key={s.id} value={s.name}>
-                                                    {s.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="lead_score">Lead Score</Label>
-                                    <Input
-                                        id="lead_score"
-                                        type="number"
-                                        {...register("lead_score")}
-                                        placeholder="0"
-                                    />
-                                </div>
-                            </div>
+                             <div className="space-y-2">
+                                 <Label htmlFor="status">Status</Label>
+                                 <Select
+                                     value={watchedStatus}
+                                     onValueChange={(value) => setValue("status", value)}
+                                 >
+                                     <SelectTrigger>
+                                         <SelectValue placeholder="Select status" />
+                                     </SelectTrigger>
+                                     <SelectContent>
+                                         {statuses?.map((s) => (
+                                             <SelectItem key={s.id} value={s.name}>
+                                                 {s.label}
+                                             </SelectItem>
+                                         ))}
+                                     </SelectContent>
+                                 </Select>
+                             </div>
 
                             <DialogFooter>
                                 <Button
