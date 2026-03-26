@@ -1,33 +1,57 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { sendEmail } from '@/lib/email-service';
 
 export async function POST(request: Request) {
     try {
-        const bodyText = await request.text();
-        const payload = JSON.parse(bodyText);
+        const payload = await request.json();
         const { subject, body, contactIds, isSelectAllMatching, filters } = payload;
 
         if (!subject || !body) {
             return NextResponse.json({ error: 'Subject and body are required' }, { status: 400 });
         }
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const cookieStore = await cookies();
+        const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name: string) {
+                        return cookieStore.get(name)?.value;
+                    },
+                },
+            }
+        );
 
-        if (!supabaseUrl || !supabaseServiceKey) {
-            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        // 1. Get User Session
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
+        // 2. Get User Organization
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("organization_id")
+            .eq("user_id", user.id)
+            .single();
+
+        if (profileError || !profile) {
+            return NextResponse.json({ error: "Profile/Organization not found" }, { status: 404 });
+        }
+
+        const orgId = profile.organization_id;
 
         // Resolve Contacts
         let contacts: { id: string, email: string, first_name: string, last_name: string, organization_id: string }[] = [];
 
         if (isSelectAllMatching) {
-            let query = supabaseAdmin.from('contacts').select('id, email, first_name, last_name, organization_id');
+            let query = supabase
+                .from('contacts')
+                .select('id, email, first_name, last_name, organization_id')
+                .eq('organization_id', orgId);
             if (filters?.search) {
                 query = query.or(`first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,company.ilike.%${filters.search}%`);
             }
@@ -45,10 +69,11 @@ export async function POST(request: Request) {
             if (!contactIds || contactIds.length === 0) {
                 return NextResponse.json({ error: 'No contacts specified' }, { status: 400 });
             }
-            const { data, error } = await supabaseAdmin
+            const { data, error } = await supabase
                 .from('contacts')
                 .select('id, email, first_name, last_name, organization_id')
-                .in('id', contactIds);
+                .in('id', contactIds)
+                .eq('organization_id', orgId);
 
             if (error) throw error;
             contacts = data || [];

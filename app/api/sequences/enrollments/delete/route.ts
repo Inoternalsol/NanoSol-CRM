@@ -1,4 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -9,33 +10,48 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No enrollment IDs provided" }, { status: 400 });
         }
 
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const cookieStore = await cookies();
+        const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name: string) {
+                        return cookieStore.get(name)?.value;
+                    },
+                },
+            }
+        );
 
-        // Security check: Verify the sequence belongs to the same organization
-        // (In a real app, you'd verify the user's session and organization membership here too)
-        // For now, we rely on the fact that if they have the sequenceId, they can manage it.
-        // Better: We should check the user's session.
+        // 1. Get User Session
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
 
-        const { data, error } = await supabase
+        // 2. Get User Organization
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("organization_id")
+            .eq("user_id", user.id)
+            .single();
+
+        if (profileError || !profile) {
+            return NextResponse.json({ error: "Profile/Organization not found" }, { status: 404 });
+        }
+
+        // 3. Delete enrollments (RLS will also handle this if enabled, but we add an explicit check)
+        // We use the authenticated client to ensure RLS is respected
+        const { data, error: deleteError } = await supabase
             .from("sequence_enrollments")
             .delete()
             .in("id", enrollmentIds)
+            .eq("organization_id", profile.organization_id)
             .select();
 
-        if (error) {
-            console.error("[API] Delete error:", error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-
-        if ((data?.length || 0) === 0) {
-            console.warn("[API] No records deleted. IDs may not exist or are already deleted.");
-            return NextResponse.json({
-                error: "Enrollment not found or already deleted",
-                count: enrollmentIds.length,
-                deletedCount: 0
-            }, { status: 404 });
+        if (deleteError) {
+            console.error("[API] Delete error:", deleteError);
+            return NextResponse.json({ error: deleteError.message }, { status: 500 });
         }
 
         return NextResponse.json({
