@@ -35,12 +35,15 @@ export async function POST(request: Request) {
 
         const supabase = createClient(supabaseUrl, supabaseKey);
 
+        const status = body.status || "new";
+        
         const contactData = {
             organization_id: orgId,
             first_name: firstName,
             last_name: lastName,
             email: email,
             phone: phone,
+            status: status,
             source: "API Integration",
             tags: ["External API"],
         };
@@ -102,7 +105,7 @@ export async function GET(request: Request) {
 
         let query = supabase
             .from("contacts")
-            .select("id, first_name, last_name, email, phone, created_at")
+            .select("id, first_name, last_name, email, phone, status, created_at")
             .eq("organization_id", orgId)
             .order("created_at", { ascending: false });
 
@@ -110,7 +113,7 @@ export async function GET(request: Request) {
         // Example: where[0][type]=after&where[0][field]=createdAt&where[0][value]=2023-12-5T00:00:00
         
         let i = 0;
-        const filtersFound: any[] = [];
+        const filtersFound: { field: string; type: string; value: string }[] = [];
         
         // We use a safe loop to find all where[i] patterns
         while (searchParams.has(`where[${i}][field]`)) {
@@ -161,6 +164,7 @@ export async function GET(request: Request) {
             lastName: c.last_name,
             emailAddress: c.email,
             phoneNumber: c.phone,
+            status: c.status,
             createdAt: c.created_at
         }));
 
