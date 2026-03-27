@@ -35,16 +35,15 @@ export interface PaginatedResult<T> {
 
 const DEFAULT_STATUSES: Omit<ContactStatus, "id" | "organization_id" | "created_at">[] = [
     { name: "new", label: "New", color: "gray", order: 1 },
-    { name: "not_interested", label: "Not interested", color: "red", order: 2 },
-    { name: "call_back", label: "Call back", color: "blue", order: 3 },
-    { name: "no_answer", label: "No Answer", color: "orange", order: 4 },
-    { name: "no_answer_1", label: "No answer 1", color: "orange", order: 5 },
-    { name: "no_answer_2", label: "No answer 2", color: "orange", order: 6 },
-    { name: "no_answer_3", label: "No answer 3", color: "orange", order: 7 },
-    { name: "reassign", label: "Reassign", color: "blue", order: 8 },
-    { name: "recovery", label: "Recovery", color: "green", order: 9 },
-    { name: "not_potential", label: "Not potential", color: "slate", order: 10 },
-    { name: "voice_message", label: "Voice message", color: "purple", order: 11 },
+    { name: "no_answer", label: "No Answer", color: "orange", order: 2 },
+    { name: "reassign", label: "Reassign", color: "orange", order: 3 },
+    { name: "recovery", label: "Recovery", color: "blue", order: 4 },
+    { name: "not_interested", label: "Not interested", color: "red", order: 5 },
+    { name: "call_back", label: "Call back", color: "blue", order: 6 },
+    { name: "not_potential", label: "Not potential", color: "slate", order: 7 },
+    { name: "voice_message", label: "Voice message", color: "purple", order: 8 },
+    { name: "depositor", label: "Depositor", color: "green", order: 9 },
+    { name: "high_potential", label: "High potential", color: "yellow", order: 10 },
 ];
 
 // ============================================

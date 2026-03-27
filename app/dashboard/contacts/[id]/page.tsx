@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
 import { LeadScoreBadge } from "@/components/contacts/lead-score-badge";
+import { ContactStatusSelector } from "@/components/contacts/contact-status-selector";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveProfile } from "@/hooks/use-data";
 import { toast } from "sonner";
@@ -224,6 +225,7 @@ export default function ContactDetailPage() {
                                 )}
                             </div>
                             <div className="flex items-center gap-2 pt-1">
+                                <ContactStatusSelector contactId={contactId} currentStatus={contact.status} />
                                 <LeadScoreBadge score={contact.lead_score || 0} reason={contact.score_reason} />
                                 <Button
                                     variant="ghost"
