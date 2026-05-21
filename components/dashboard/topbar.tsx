@@ -26,6 +26,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/hooks/use-notifications";
+import { InstallAppButton } from "@/components/ui/install-app-button";
 
 export function Topbar() {
     const router = useRouter();
@@ -79,6 +80,9 @@ export function Topbar() {
             </div>
 
             <div className="flex items-center gap-2">
+                {/* PWA Install */}
+                <InstallAppButton />
+
                 {/* Dialer */}
                 <Button variant="ghost" size="icon" onClick={openDialer}>
                     <Phone className="h-5 w-5" />

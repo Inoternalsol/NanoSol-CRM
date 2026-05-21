@@ -16,6 +16,8 @@ import { OrgBrandingProvider } from "@/components/providers/org-branding-provide
 import { CallWidget } from "@/components/dashboard/call-widget";
 import { SipProvider } from "@/components/providers/sip-provider";
 import { PageTransition } from "@/components/providers/page-transition";
+import { GuidedTour } from "@/components/onboarding/guided-tour";
+import { RealtimeProvider } from "@/components/providers/realtime-provider";
 
 export default function DashboardLayout({
     children,
@@ -29,7 +31,8 @@ export default function DashboardLayout({
             <CopilotProvider>
                 <PresenceProvider>
                     <OrgBrandingProvider>
-                        <div className="min-h-screen bg-background relative overflow-x-clip">
+                        <RealtimeProvider>
+                            <div className="min-h-screen bg-background relative overflow-x-clip">
                             {/* Global Background Layer */}
                             <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-500/5 via-background to-background pointer-events-none" />
 
@@ -68,6 +71,9 @@ export default function DashboardLayout({
                                 <CopilotWidget />
                             </ErrorBoundary>
 
+                            {/* Guided Onboarding */}
+                            <GuidedTour />
+
                             {/* Global Navigation Progress */}
                             <ProgressBar
                                 height="3px"
@@ -76,6 +82,7 @@ export default function DashboardLayout({
                                 shallowRouting
                             />
                         </div>
+                        </RealtimeProvider>
                     </OrgBrandingProvider>
                 </PresenceProvider>
             </CopilotProvider>
