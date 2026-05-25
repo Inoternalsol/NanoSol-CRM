@@ -41,16 +41,22 @@ export class JanusClient {
         return new Promise((resolve, reject) => {
             try {
                 this.ws = new WebSocket(this.url, "janus-protocol");
-                this.ws.onopen = () => resolve();
+                let established = false;
+                this.ws.onopen = () => {
+                    established = true;
+                    resolve();
+                };
                 this.ws.onerror = (err: Event) => {
-                    console.error("[JanusClient] WebSocket connection error:", err);
+                    console.error(`[JanusClient] WebSocket connection error on ${this.url}`);
                     reject(new Error(`WebSocket connection to ${this.url} failed. Ensure the server is reachable and SSL is valid.`));
                 };
                 this.ws.onclose = () => {
                     console.warn("[JanusClient] WebSocket closed. Stopping keepalive.");
                     this.stopKeepalive();
-                    const handler = this.eventHandlers.get("close");
-                    if (handler) handler({ janus: "close", transaction: "" });
+                    if (established) {
+                        const handler = this.eventHandlers.get("close");
+                        if (handler) handler({ janus: "close", transaction: "" });
+                    }
                 };
                 this.ws.onmessage = (msg) => {
                     try {

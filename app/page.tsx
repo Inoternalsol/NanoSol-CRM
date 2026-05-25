@@ -1,8 +1,10 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 
-const LandingPageContent = dynamic(
+export const dynamic = "force-dynamic";
+
+const LandingPageContent = nextDynamic(
   () => import("@/components/landing/landing-page"),
   { ssr: false }
 );

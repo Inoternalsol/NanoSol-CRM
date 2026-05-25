@@ -1,8 +1,10 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 
-const LoginContent = dynamic(
+export const dynamic = "force-dynamic";
+
+const LoginContent = nextDynamic(
     () => import("./login-content"),
     { ssr: false }
 );
