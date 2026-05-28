@@ -34,6 +34,21 @@ const customCacheRules = [
     }
 ];
 
+// Intercept fetch requests for dynamic/authentication routes early
+// calling stopImmediatePropagation prevents Serwist from matching and handling them,
+// letting the browser fetch them natively. This prevents PWA fetch/redirect errors on /dashboard.
+self.addEventListener("fetch", (event) => {
+    const url = new URL(event.request.url);
+    if (
+        url.pathname.startsWith("/dashboard") ||
+        url.pathname.startsWith("/api") ||
+        url.pathname.startsWith("/login")
+    ) {
+        event.stopImmediatePropagation();
+        return;
+    }
+});
+
 const serwist = new Serwist({
     precacheEntries: self.__SW_MANIFEST,
     skipWaiting: true,
@@ -43,4 +58,5 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
 
