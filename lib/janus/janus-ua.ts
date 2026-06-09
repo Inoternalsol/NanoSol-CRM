@@ -200,8 +200,15 @@ export class JanusUA {
     }
 
     public async hangup() {
-        await this.client.sendMessage({ request: "hangup" });
-        this.cleanup();
+        try {
+            if (this.client.activeHandleId) {
+                await this.client.sendMessage({ request: "hangup" });
+            }
+        } catch (e) {
+            console.warn("[JanusUA] Failed to send hangup message (already detached/disconnected):", e);
+        } finally {
+            this.cleanup();
+        }
     }
 
     private handleAccepted(msg: JanusMessage) {
@@ -291,8 +298,15 @@ export class JanusUA {
 
     public async decline() {
         console.log("[JanusUA] Declining incoming call");
-        await this.client.sendMessage({ request: "decline" });
-        this.cleanup();
+        try {
+            if (this.client.activeHandleId) {
+                await this.client.sendMessage({ request: "decline" });
+            }
+        } catch (e) {
+            console.warn("[JanusUA] Failed to send decline message:", e);
+        } finally {
+            this.cleanup();
+        }
     }
 
     private handleIncomingCall(msg: JanusMessage) {
@@ -307,11 +321,19 @@ export class JanusUA {
 
     public async sendDTMF(tone: string) {
         if (!this.pc) throw new Error("No active peer connection for DTMF");
+        if (!this.client.activeHandleId) {
+            console.warn("[JanusUA] Cannot send DTMF: SIP not registered/attached");
+            return;
+        }
         console.log(`[JanusUA] Sending DTMF tone: ${tone}`);
-        await this.client.sendMessage({
-            request: "dtmf",
-            dtmf: tone
-        });
+        try {
+            await this.client.sendMessage({
+                request: "dtmf",
+                dtmf: tone
+            });
+        } catch (e) {
+            console.warn("[JanusUA] Failed to send DTMF tone:", e);
+        }
     }
 
     public async replaceAudioTrack(newTrack: MediaStreamTrack) {

@@ -42,7 +42,10 @@ self.addEventListener("fetch", (event) => {
     if (
         url.pathname.startsWith("/dashboard") ||
         url.pathname.startsWith("/api") ||
-        url.pathname.startsWith("/login")
+        url.pathname.startsWith("/login") ||
+        url.hostname.includes("supabase.co") ||
+        url.hostname.includes("nanocall.space") ||
+        url.hostname.includes("illyvoip.com")
     ) {
         event.stopImmediatePropagation();
         return;

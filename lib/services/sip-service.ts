@@ -256,7 +256,11 @@ export class SipService {
                 remoteAudio.setSinkId(selectedSpeakerId).catch(console.error);
             }
 
-            ua.call(target, selectedMicrophoneId || undefined);
+            ua.call(target, selectedMicrophoneId || undefined).catch((err: any) => {
+                console.error("[SIP] Janus UA call failed:", err);
+                toast.error(err?.message || "SIP not registered yet. Please wait for registration to complete.");
+                useDialerStore.getState().endCall();
+            });
             return;
         }
 
@@ -567,6 +571,12 @@ export class SipService {
             console.log(`[SIP] ✅ Account ${id} registered via Janus`);
             this._isRegistered.set(id, true);
             this._isConnected.set(id, true);
+        });
+
+        ua.on('unregistered', (data: any) => {
+            console.log(`[SIP] Account ${id} unregistered via Janus`, data);
+            this._isRegistered.set(id, false);
+            this._isConnected.set(id, false);
         });
 
         ua.on('incomingcall', (msg: unknown) => {
