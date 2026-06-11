@@ -32,7 +32,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from '@/lib/utils';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { createClient } from "@/lib/supabase/client";
+import { Loader2 } from "lucide-react";
 
 // Initial node types
 const nodeTypes = {
@@ -61,6 +71,70 @@ function BuilderInternal({ workflow }: WorkflowBuilderProps) {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const { trigger: updateWorkflow, isMutating: isSaving } = useUpdateWorkflow();
     const { data: templates } = useEmailTemplates();
+
+    const [testDialogOpen, setTestDialogOpen] = useState(false);
+    const [contacts, setContacts] = useState<any[]>([]);
+    const [selectedContactId, setSelectedContactId] = useState<string>("");
+    const [testRunning, setTestRunning] = useState(false);
+    const [testLogs, setTestLogs] = useState<Array<{ step: string; level: 'info' | 'warn' | 'error'; message: string; timestamp: string }>>([]);
+    const [contactsLoading, setContactsLoading] = useState(false);
+
+    useEffect(() => {
+        if (testDialogOpen && contacts.length === 0) {
+            const fetchContacts = async () => {
+                setContactsLoading(true);
+                try {
+                    const supabase = createClient();
+                    const { data, error } = await supabase
+                        .from('contacts')
+                        .select('id, first_name, last_name, email')
+                        .order('first_name', { ascending: true })
+                        .limit(20);
+                    if (!error && data) {
+                        setContacts(data);
+                        if (data.length > 0) setSelectedContactId(data[0].id);
+                    }
+                } catch (err) {
+                    console.error("Failed to load test contacts", err);
+                } finally {
+                    setContactsLoading(false);
+                }
+            };
+            fetchContacts();
+        }
+    }, [testDialogOpen, contacts.length]);
+
+    const handleRunTest = async () => {
+        if (!selectedContactId) {
+            toast.error("Please select a test contact first");
+            return;
+        }
+        setTestRunning(true);
+        setTestLogs([]);
+        try {
+            const res = await fetch("/api/automation/test-run", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contactId: selectedContactId,
+                    nodes,
+                    edges
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setTestLogs(data.logs);
+                toast.success("Simulation finished");
+            } else {
+                toast.error(data.error || "Simulation failed");
+            }
+        } catch (err) {
+            console.error("Failed to run test", err);
+            toast.error("Network error running simulation");
+        } finally {
+            setTestRunning(false);
+        }
+    };
 
     const selectedNode = useMemo(() =>
         nodes.find(n => n.id === selectedNodeId),
@@ -147,7 +221,7 @@ function BuilderInternal({ workflow }: WorkflowBuilderProps) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => setTestDialogOpen(true)}>
                         <Play className="w-4 h-4" />
                         Test Run
                     </Button>
@@ -406,6 +480,105 @@ function BuilderInternal({ workflow }: WorkflowBuilderProps) {
                     )}
                 </aside>
             </div>
+
+            <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+                <DialogContent className="sm:max-w-[550px] max-h-[85vh] flex flex-col overflow-hidden bg-background text-foreground border border-white/10">
+                    <DialogHeader>
+                        <DialogTitle>Workflow Simulation (Test Run)</DialogTitle>
+                        <DialogDescription>
+                            Simulate the visual execution of your workflow nodes against a selected contact.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4 flex-1 flex flex-col min-h-0">
+                        <div className="space-y-2">
+                            <Label>Select Test Contact</Label>
+                            <div className="flex gap-2">
+                                <Select
+                                    value={selectedContactId}
+                                    onValueChange={setSelectedContactId}
+                                    disabled={contactsLoading || testRunning}
+                                >
+                                    <SelectTrigger className="flex-1 bg-muted/20 border-white/5 h-10">
+                                        <SelectValue placeholder="Choose a contact..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {contacts.map((c) => (
+                                            <SelectItem key={c.id} value={c.id}>
+                                                {c.first_name} {c.last_name || ""} ({c.email || "no email"})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                <Button 
+                                    className="bg-primary hover:bg-primary/95 text-white h-10 px-5 rounded-xl font-medium shrink-0 flex items-center justify-center gap-1.5"
+                                    onClick={handleRunTest}
+                                    disabled={testRunning || !selectedContactId}
+                                >
+                                    {testRunning ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Running...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Play className="w-4 h-4" />
+                                            Run Simulation
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 flex flex-col min-h-0 border border-white/5 bg-muted/10 rounded-2xl overflow-hidden p-4">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block pl-1">Simulation Execution Logs</span>
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs scrollbar-hide">
+                                {testLogs.length === 0 ? (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground italic text-center p-8">
+                                        Select a contact and click "Run Simulation" to see step-by-step traces here.
+                                    </div>
+                                ) : (
+                                    testLogs.map((log, index) => {
+                                        const isError = log.level === 'error';
+                                        const isWarn = log.level === 'warn';
+                                        return (
+                                            <div 
+                                                key={index}
+                                                className={cn(
+                                                    "p-2.5 rounded-xl border flex flex-col gap-1 text-left",
+                                                    isError 
+                                                        ? "bg-red-500/10 border-red-500/20 text-red-400" 
+                                                        : isWarn 
+                                                            ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"
+                                                            : "bg-background/40 border-white/5 text-foreground"
+                                                )}
+                                            >
+                                                <div className="flex justify-between items-center gap-4 text-[10px] text-muted-foreground">
+                                                    <span className="font-bold uppercase tracking-wider">{log.step}</span>
+                                                    <span>{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                                                </div>
+                                                <span className="leading-relaxed whitespace-pre-wrap">{log.message}</span>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-2 border-t border-white/5">
+                        <Button
+                            variant="outline"
+                            onClick={() => setTestDialogOpen(false)}
+                            className="rounded-xl"
+                            disabled={testRunning}
+                        >
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

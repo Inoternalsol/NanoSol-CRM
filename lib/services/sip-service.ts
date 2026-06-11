@@ -482,6 +482,35 @@ export class SipService {
         }
     }
 
+    public transfer(targetNumber: string, accountId?: string) {
+        const id = accountId || this._activeUAId;
+        const ua = id ? this.uas.get(id) : null;
+
+        console.log(`[SIP] Transfer requested to ${targetNumber} for account ${id}`);
+
+        if (_JanusUA && ua instanceof _JanusUA) {
+            ua.transfer(targetNumber).catch((e: any) => {
+                console.error("[SIP] Janus transfer failed:", e);
+                toast.error("Failed to transfer call via Janus");
+            });
+            return;
+        }
+
+        const session = id ? this.sessions.get(id) : null;
+        if (session) {
+            if (typeof session.refer === 'function') {
+                session.refer(targetNumber);
+                toast.success(`Transfer initiated to ${targetNumber}`);
+            } else {
+                console.warn("[SIP] Session refer (transfer) is not supported or not available");
+                toast.error("Transfer not supported on this session");
+            }
+        } else {
+            console.warn("[SIP] No active session to transfer");
+            toast.error("No active call to transfer");
+        }
+    }
+
     public toggleSpeaker(isOn: boolean) {
         console.log(`[SIP] Toggle speaker output: ${isOn ? "ON" : "OFF"}`);
         if (typeof document !== "undefined") {

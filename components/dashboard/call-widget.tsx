@@ -429,6 +429,11 @@ export function CallWidget() {
                                         showKeypad={showKeypad}
                                         onKeypadToggle={() => setShowKeypad(!showKeypad)}
                                         onHangup={() => handleHangup()}
+                                        onTransfer={(target) => {
+                                            import("@/lib/services/sip-service").then(({ SipService }) => {
+                                                SipService.getInstance().transfer(target, selectedSipAccountId || undefined);
+                                            });
+                                        }}
                                     />
                                 ) : (
                                     <Tabs defaultValue="dial" className="w-full mt-4">

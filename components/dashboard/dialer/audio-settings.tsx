@@ -33,6 +33,14 @@ export function AudioDeviceSettings() {
 
         // Enumerate devices helper
         const loadDevices = async () => {
+            if (activeStream) {
+                try {
+                    activeStream.getTracks().forEach(track => track.stop());
+                } catch (e) {
+                    console.warn("Failed to stop previous stream tracks", e);
+                }
+                activeStream = null;
+            }
             try {
                 // Requesting permission is often required first to see device labels
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });

@@ -29,6 +29,7 @@ interface ActiveCallProps {
     showKeypad: boolean;
     onKeypadToggle: () => void;
     onHangup: () => void;
+    onTransfer?: (target: string) => void;
 }
 
 export const ActiveCall = ({
@@ -43,7 +44,8 @@ export const ActiveCall = ({
     onSpeakerToggle,
     showKeypad,
     onKeypadToggle,
-    onHangup
+    onHangup,
+    onTransfer
 }: ActiveCallProps) => {
     const [stream, setStream] = React.useState<MediaStream | null>(null);
     React.useEffect(() => {
@@ -57,6 +59,8 @@ export const ActiveCall = ({
     const [voicemailFile, setVoicemailFile] = useState<File | null>(null);
     const [isDropping, setIsDropping] = useState(false);
     const [quality, setQuality] = useState<"good" | "fair" | "poor" | "unknown">("unknown");
+    const [showTransfer, setShowTransfer] = useState(false);
+    const [transferUri, setTransferUri] = useState("");
 
     useEffect(() => {
         const handleQuality = (e: CustomEvent<{ quality: "good" | "fair" | "poor" | "unknown" }>) => {
@@ -163,7 +167,11 @@ export const ActiveCall = ({
                 <CallControlButton
                     icon={PhoneForwarded}
                     label="Transfer"
-                    onClick={() => { }}
+                    active={showTransfer}
+                    onClick={() => {
+                        setShowTransfer(!showTransfer);
+                        if (showKeypad) onKeypadToggle();
+                    }}
                 />
             </div>
 
@@ -186,6 +194,49 @@ export const ActiveCall = ({
                                 <FileAudio className="mr-2 h-4 w-4" />
                                 Drop Voicemail
                             </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {showTransfer && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="w-full mb-4"
+                        >
+                            <div className="flex flex-col gap-2.5 p-4 bg-muted/20 rounded-2xl border border-white/5 text-left w-full">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1">Transfer Destination</span>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 1002 or sip:john@domain"
+                                        value={transferUri}
+                                        onChange={(e) => setTransferUri(e.target.value)}
+                                        className="flex-1 px-3 py-2 bg-background/50 border border-white/10 rounded-xl text-sm outline-none focus:border-primary/50 text-foreground font-medium placeholder:text-muted-foreground/50 placeholder:font-normal"
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && transferUri) {
+                                                onTransfer?.(transferUri);
+                                                setShowTransfer(false);
+                                                setTransferUri("");
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        size="sm"
+                                        className="rounded-xl px-4 bg-primary hover:bg-primary/95 text-white"
+                                        disabled={!transferUri}
+                                        onClick={() => {
+                                            onTransfer?.(transferUri);
+                                            setShowTransfer(false);
+                                            setTransferUri("");
+                                        }}
+                                    >
+                                        Send
+                                    </Button>
+                                </div>
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

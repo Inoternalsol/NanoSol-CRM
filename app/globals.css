@@ -137,4 +137,37 @@
   .btn-hover-effect {
     @apply transition-transform duration-200 active:scale-95;
   }
+  
+  /* Premium Shadow Glow Utilities */
+  .shadow-glow-primary {
+    box-shadow: 0 0 15px -3px var(--primary);
+  }
+  .animate-glow {
+    animation: glow-animation 2s ease-in-out infinite alternate;
+  }
+  
+  /* Elegant Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.55 0.02 260 / 20%);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+}
+
+@keyframes glow-animation {
+  from {
+    box-shadow: 0 0 4px -1px var(--primary);
+  }
+  to {
+    box-shadow: 0 0 16px 2px var(--primary);
+  }
 }

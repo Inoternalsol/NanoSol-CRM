@@ -499,6 +499,27 @@ export class JanusUA {
         this.handlers.get(event)?.forEach(h => h(...args));
     }
 
+    public async transfer(targetUri: string) {
+        if (!this.client.activeHandleId) {
+            throw new Error("SIP not registered yet. Please wait for registration to complete before transferring a call.");
+        }
+        let sipUri = targetUri;
+        if (!sipUri.startsWith("sip:")) {
+            sipUri = `sip:${sipUri}`;
+        }
+        console.log(`[JanusUA] Transferring call to: ${sipUri}`);
+        try {
+            await this.client.sendMessage({
+                request: "transfer",
+                uri: sipUri
+            });
+            console.log("[JanusUA] Transfer request sent successfully");
+        } catch (e) {
+            console.warn("[JanusUA] Failed to send transfer request:", e);
+            throw e;
+        }
+    }
+
     public stop() {
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);

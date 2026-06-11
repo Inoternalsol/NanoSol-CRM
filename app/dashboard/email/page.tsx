@@ -27,6 +27,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from "@/components/ui/sheet";
 import { useEmailTemplates, useDeleteEmailTemplate, useEmailSequences, useActiveProfile, useDeleteEmailSequence, useUpdateEmailSequence, useSMTPConfigs } from "@/hooks/use-data";
 import { useEmails, useEmailBatchAction } from "@/hooks/use-email";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -70,6 +77,8 @@ export default function EmailPage() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isProcessingSequences, setIsProcessingSequences] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+    const [composerDefaultTo, setComposerDefaultTo] = useState<string>("");
     const itemsPerPage = 20;
 
     const { data: templates = [], isLoading: templatesLoading, mutate: mutateTemplates } = useEmailTemplates();
@@ -111,6 +120,17 @@ export default function EmailPage() {
             setIsSyncing(false);
         }
     };
+
+    // Auto mark email as read when opened
+    useEffect(() => {
+        if (selectedEmail && !selectedEmail.is_read) {
+            batchAction({ emailIds: [selectedEmail.id], action: 'mark_read' }).catch(err => {
+                console.error("Failed to mark email as read", err);
+            });
+            // Update local state item immediately for responsive UI
+            selectedEmail.is_read = true;
+        }
+    }, [selectedEmail, batchAction]);
 
     // Helper to format date
     const formatTime = (dateStr: string) => {
@@ -536,7 +556,7 @@ export default function EmailPage() {
                                                         className="mr-2"
                                                     />
 
-                                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { /* Open email detail */ }}>
+                                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedEmail(email)}>
                                                         <div className="flex items-center justify-between mb-1">
                                                             <div className="flex items-center gap-2 min-w-0">
                                                                 <span className={cn("text-sm truncate max-w-[180px]", !email.is_read ? "font-semibold text-foreground" : "text-muted-foreground")}>
@@ -807,7 +827,11 @@ export default function EmailPage() {
 
             <EmailComposerDialog
                 open={composerOpen}
-                onOpenChange={setComposerOpen}
+                onOpenChange={(open) => {
+                    setComposerOpen(open);
+                    if (!open) setComposerDefaultTo("");
+                }}
+                defaultTo={composerDefaultTo}
                 organizationId={activeProfile?.organization_id || ""}
             />
 
@@ -826,6 +850,125 @@ export default function EmailPage() {
                 sequenceName={selectedSequence?.name || ""}
                 organizationId={selectedSequence?.organization_id || ""}
             />
+
+            {/* Email Detail Sheet */}
+            <Sheet open={!!selectedEmail} onOpenChange={(open) => { if (!open) setSelectedEmail(null); }}>
+                <SheetContent className="sm:max-w-[600px] flex flex-col h-full bg-background/95 backdrop-blur-md border-l border-white/10 p-6">
+                    {selectedEmail && (
+                        <div className="flex flex-col h-full overflow-hidden text-left space-y-4">
+                            <SheetHeader className="pb-4 border-b border-white/5 space-y-1">
+                                <SheetTitle className="text-xl font-bold flex items-center justify-between gap-4">
+                                    <span className="truncate pr-4">{selectedEmail.subject || "(No Subject)"}</span>
+                                    <div className="flex gap-2 shrink-0">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-destructive hover:text-destructive-foreground hover:bg-destructive/10 rounded-lg"
+                                            onClick={async () => {
+                                                const id = selectedEmail.id;
+                                                setSelectedEmail(null);
+                                                try {
+                                                    await batchAction({ emailIds: [id], action: "delete" });
+                                                    toast.success("Email moved to trash");
+                                                } catch (err) {
+                                                    toast.error("Failed to delete email");
+                                                }
+                                            }}
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </SheetTitle>
+                                <SheetDescription className="text-xs text-muted-foreground">
+                                    Message Details
+                                </SheetDescription>
+                            </SheetHeader>
+
+                            <div className="space-y-3 text-sm border-b border-white/5 pb-4">
+                                <div className="grid grid-cols-[60px_1fr] gap-2">
+                                    <span className="text-muted-foreground font-medium">From:</span>
+                                    <span className="font-semibold text-foreground truncate">
+                                        {selectedEmail.from_name ? `${selectedEmail.from_name} <${selectedEmail.from_addr}>` : selectedEmail.from_addr}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-[60px_1fr] gap-2">
+                                    <span className="text-muted-foreground font-medium">To:</span>
+                                    <span className="text-foreground truncate">{selectedEmail.to_addr}</span>
+                                </div>
+                                <div className="grid grid-cols-[60px_1fr] gap-2">
+                                    <span className="text-muted-foreground font-medium">Date:</span>
+                                    <span className="text-foreground">
+                                        {new Date(selectedEmail.received_at).toLocaleString([], {
+                                            dateStyle: "medium",
+                                            timeStyle: "short",
+                                        })}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto py-2">
+                                {selectedEmail.body_html ? (
+                                    <iframe
+                                        srcDoc={`
+                                            <!DOCTYPE html>
+                                            <html>
+                                            <head>
+                                                <style>
+                                                    body {
+                                                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                                                        font-size: 14px;
+                                                        line-height: 1.6;
+                                                        color: #f3f4f6;
+                                                        background-color: transparent;
+                                                        margin: 0;
+                                                        padding: 0;
+                                                        word-break: break-word;
+                                                    }
+                                                    a { color: #3b82f6; text-decoration: none; }
+                                                    a:hover { text-decoration: underline; }
+                                                    img { max-width: 100%; height: auto; }
+                                                </style>
+                                            </head>
+                                            <body>
+                                                ${selectedEmail.body_html}
+                                            </body>
+                                            </html>
+                                        `}
+                                        className="w-full h-full border-0 bg-transparent min-h-[300px]"
+                                        title="Email Body"
+                                        sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                    />
+                                ) : (
+                                    <div className="whitespace-pre-wrap text-foreground leading-relaxed break-words font-sans text-sm">
+                                        {selectedEmail.body_text || "(No content)"}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="pt-4 border-t border-white/5 flex justify-end gap-2 shrink-0">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setSelectedEmail(null)}
+                                    className="rounded-xl"
+                                >
+                                    Close
+                                </Button>
+                                <Button
+                                    className="bg-primary hover:bg-primary/95 text-white rounded-xl"
+                                    onClick={() => {
+                                        setComposerDefaultTo(selectedEmail.from_addr);
+                                        setSelectedEmail(null);
+                                        setComposerOpen(true);
+                                    }}
+                                >
+                                    Reply
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
         </motion.div>
     );
 }
