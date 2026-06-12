@@ -184,12 +184,6 @@ export function CallWidget() {
 
     // Outbound ringing is handled natively via WebRTC early media.
 
-    // Save call to history when call ends
-    useEffect(() => {
-        // We now rely on `createCallLog` in handleHangup to persist calls to Supabase,
-        // so we just track the previous call status here.
-        prevCallStatusRef.current = callStatus;
-    }, [callStatus]);
 
     // Derive duration display from store state
     const durationDisplay = `${Math.floor(callDuration / 60).toString().padStart(2, "0")}:${(callDuration % 60).toString().padStart(2, "0")}`;
